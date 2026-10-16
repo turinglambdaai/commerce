@@ -42,7 +42,7 @@ duplicate webhook: ignored
 ## 为什么需要 Commerce？
 
 单个产品可以在一个下午接好一次支付；产品家族不能在每个应用里重复实现
-支付验签、重试、退款、订阅续期、客户找回与许可证签发。
+支付验签、重试、退款、订阅续期、凭证找回与许可证签发。
 
 Commerce 建立一条统一边界：
 
@@ -87,7 +87,9 @@ Rivet / Glaze / Keel -X-> Commerce
 Permit               -X-> Commerce
 ```
 
-规范边界见[架构](docs/architecture.md)与[家族集成](docs/family-integration.md)。
+本仓边界见[架构](docs/architecture.md)与[家族集成](docs/family-integration.md)；
+[五仓家族架构](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md)
+是跨仓依赖、职责与发布顺序的唯一权威来源。
 
 ## 核心词汇
 
@@ -131,7 +133,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - Pancake 或 ZPAY 网络 adapter；
 - SQL 持久化与 Webhook HTTP 端点；
 - Permit issuer 集成和 credential 交付；
-- 订阅、席位、客户门户或运营后台；
+- 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
 下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的 Pancake 一次性购买链路。

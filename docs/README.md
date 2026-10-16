@@ -19,8 +19,9 @@ operations. Do not duplicate a rule across several guides.
   store adapter must prove before emitting a canonical event.
 - [Permit integration](permit-integration.md) — how rights intents become
   complete signed credential revisions.
-- [Family integration](family-integration.md) — exact boundaries with Rivet,
-  Glaze, Keel, and Permit.
+- [Family integration](family-integration.md) — Commerce's local edges to
+  Rivet, Glaze, Keel, Permit, products, and identity systems; it links to the
+  canonical five-repository architecture.
 
 ## Production work
 

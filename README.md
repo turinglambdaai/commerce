@@ -47,7 +47,7 @@ architectural and operational question.
 
 A product can integrate one checkout in an afternoon. A product family cannot
 safely repeat payment verification, retries, refunds, subscription renewal,
-customer recovery, and licence issuance in every application.
+credential recovery, and licence issuance in every application.
 
 Commerce creates one durable boundary:
 
@@ -97,8 +97,9 @@ Permit               -X-> Commerce
 ```
 
 See [Architecture](docs/architecture.md) and
-[Family integration](docs/family-integration.md) for the normative ownership
-rules.
+[Family integration](docs/family-integration.md) for the local ownership rules;
+the [family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md)
+is the canonical five-repository contract.
 
 ## Core vocabulary
 
@@ -144,7 +145,7 @@ Not implemented yet:
 - Pancake or ZPAY network adapters;
 - durable SQL storage and webhook HTTP endpoints;
 - Permit issuer integration and credential delivery;
-- subscriptions, seats, customer portal, or an operator UI;
+- subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
 The next bounded slice is the Pancake one-time-purchase path described in

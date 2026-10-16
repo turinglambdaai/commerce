@@ -3,6 +3,13 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
+The next implementation handoff is the first unchecked M1 slice. Take only the
+immutable raw-event journal and its persistence boundary; do not add projection,
+outbox, the Pancake network adapter, Permit signing, or claim delivery in the
+same change. Record the chosen persistence contract in an ADR, cover durable
+acceptance plus exact/conflicting replay with red/green tests, inspect emitted
+rows as evidence, and leave the following unchecked item as the next handoff.
+
 ## M0 — Architecture foundation
 
 - [x] Family dependency and ownership boundary

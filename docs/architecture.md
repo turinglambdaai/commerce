@@ -7,6 +7,11 @@ Commerce is a hosted commercial management plane. Its central rule is:
 
 No layer substitutes for another.
 
+The canonical cross-repository ownership and release rules live in the
+[family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
+This document owns Commerce's internal architecture and local integration
+boundary.
+
 ## System boundary
 
 ```text
@@ -44,12 +49,13 @@ projection               |
 
 | Owner | Responsibilities |
 | --- | --- |
-| Product | User-facing upgrade flow, offer selection, credential storage/import, local Permit policy evaluation |
+| Product | User-facing upgrade flow, offer selection, commercial promises, credential storage/import, local Permit policy evaluation |
 | Commerce | Offer mapping, checkout orchestration, authenticated event journal, minimal projections, rights intents, issuance workflow, credential claim delivery, audit |
 | Provider | Payment methods, money movement, provider ledger, billing UI, transaction tax/MoR duties where contracted, refunds and disputes |
 | Permit | Credential protocol, trust verification, entitlement/trial/activation semantics, local policy evaluation, issuer primitives |
 | Rivet/Glaze | Application lifecycle, UI host, secure storage primitives, distribution, update integrity |
 | Keel | Transport-neutral application value/schema/lifecycle vocabulary used by desktop runtimes |
+| Product/identity service | Stable subject binding, login, account recovery, and verified identity changes |
 
 ## Source of truth
 

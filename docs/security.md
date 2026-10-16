@@ -40,10 +40,11 @@ state are recorded with every issuance.
 
 ## Customer identity
 
-Commerce assigns an opaque stable subject id. Email, name, and provider customer
-ids are mappings or display/contact data. A change of email must not create a
-new entitlement owner or grant access to an existing one without a verified
-recovery flow.
+Commerce stores an opaque stable subject id established by a verified product
+or identity flow. Email, name, and provider customer ids are mappings or
+display/contact data. A change of email must not create a new entitlement owner
+or grant access to an existing one without a verified recovery flow owned by
+the product or identity service.
 
 ## Offline limits
 
