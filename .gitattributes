@@ -1,0 +1,5 @@
+# Cryptographic fixtures are byte-exact protocol evidence. Never let checkout
+# policy rewrite their line endings on Windows.
+commerce-test/fixtures/pancake/*.json text eol=lf
+commerce-test/fixtures/pancake/*.txt text eol=lf
+commerce-test/fixtures/pancake/*.pem text eol=lf
