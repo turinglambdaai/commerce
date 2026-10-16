@@ -80,19 +80,34 @@ query API must support periodic reconciliation:
 
 Pancake is the first production adapter because it supports individual
 developers, hosted checkout, one-time products, subscriptions, refunds, and a
-Merchant-of-Record workflow. `commerce/pancake` now authenticates its webhook
-envelope. The `X-Waffo-Signature` value contains one millisecond timestamp `t`
-and one base64 signature `v1`; RSA-SHA256/PKCS#1 v1.5 signs the ASCII timestamp,
-one period byte, and the exact request body. Verification requires an explicit
-test/production environment, uses separate public keys, accepts at most 45
-minutes of retry age and one minute of future skew, rejects duplicate top-level
-JSON fields, and verifies payload `mode` after cryptographic authentication.
+Merchant-of-Record workflow. `commerce/pancake` authenticates its webhook
+envelope and actively verifies one-time orders. The `X-Waffo-Signature` value
+contains one millisecond timestamp `t` and one base64 signature `v1`;
+RSA-SHA256/PKCS#1 v1.5 signs the ASCII timestamp, one period byte, and the exact
+request body. Verification requires an explicit test/production environment,
+uses separate public keys, accepts at most 45 minutes of retry age and one
+minute of future skew, rejects duplicate top-level JSON fields, and verifies
+payload `mode` after cryptographic authentication.
 
-The returned `pancake-webhook` remains provider-native evidence. It may become
-a canonical payment event only after the next slice actively fetches the order
-and validates authoritative state, amount, currency, offer mapping, and stable
-subject binding. Committed fixtures prove protocol conformance with disposable
-keys; live sandbox evidence remains a later M1 gate.
+The active read is one signed merchant `POST` to
+`https://api.waffo.ai/v1/graphql`; test and production share this endpoint.
+Commerce sends no idempotency key, follows no redirect, and makes no hidden
+retry. A timeout, HTTP 408/429, or 5xx response is a retryable
+`pancake-order-unavailable` failure for the durable worker. Other authentication,
+query, not-found, malformed-response, and semantic failures are separately
+typed and redacted.
+
+The query checks order id, `completed` status, `testMode`, store id,
+`orderMerchantExternalId`, one-time product id, order/payment currencies, the
+webhook payment id and its `succeeded` status, and the payment snapshot total.
+The total is converted from a strict decimal string using the configured
+currency exponent and compared as exact minor units. The external id must name
+a server-side checkout binding for one Offer and stable subject; it is not the
+subject itself. Email and provider customer identities never establish local
+authorization. Only this complete proof becomes a canonical `payment-event`.
+
+Committed fixtures and generated disposable keys prove protocol conformance;
+live sandbox evidence remains a later M1 gate.
 
 ZPAY is planned as a separate one-time-payment capability. Its documented
 duplicate callbacks, MD5 signing, exact amount checks, and recommended active

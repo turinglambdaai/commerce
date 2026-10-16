@@ -16,17 +16,25 @@
  pancake-webhook-raw-body
  pancake-webhook-payload-digest
  pancake-webhook-signature-timestamp-ms
- verify-pancake-webhook)
+ verify-pancake-webhook
+ pancake-api-endpoint
+ (struct-out pancake-order-binding)
+ pancake-merchant-client?
+ make-pancake-merchant-client
+ verify-pancake-onetime-order)
 
 (require base64
          crypto
          crypto/libcrypto
          crypto/pem
          json
+         net/http-easy
+         racket/date
          racket/list
          racket/match
          racket/port
          racket/string
+         (only-in "provider.rkt" make-verified-payment-event)
          "private/model.rkt")
 
 (define default-past-tolerance-ms (* 45 60 1000))
@@ -360,3 +368,484 @@ PEM
    body
    digest
    signature-timestamp-ms))
+
+;; ---------------------------------------------------------------------------
+;; Active one-time order verification
+
+(define pancake-api-endpoint "https://api.waffo.ai/v1/graphql")
+(define pancake-api-path "/v1/graphql")
+(define default-connect-timeout-seconds 5)
+(define default-request-timeout-seconds 10)
+(define max-order-response-bytes (* 1024 1024))
+
+(struct pancake-order-binding
+  (merchant-external-id product-id offer-id subject-id amount currency-exponent)
+  #:transparent
+  #:guard
+  (lambda (merchant-external-id product-id offer-id subject-id amount
+                                currency-exponent who)
+    (unless (and (opaque-id? merchant-external-id)
+                 (<= (string-length merchant-external-id) 128))
+      (raise-argument-error who "non-empty merchant external id up to 128 characters"
+                            merchant-external-id))
+    (unless (opaque-id? product-id)
+      (raise-argument-error who "non-empty opaque provider product id"
+                            product-id))
+    (unless (stable-id? offer-id)
+      (raise-argument-error who "stable kebab-case offer identifier" offer-id))
+    (unless (opaque-id? subject-id)
+      (raise-argument-error who "non-empty stable subject identifier" subject-id))
+    (unless (money? amount)
+      (raise-argument-error who "money?" amount))
+    (unless (and (exact-integer? currency-exponent)
+                 (<= 0 currency-exponent 4))
+      (raise-argument-error who "exact integer from 0 through 4"
+                            currency-exponent))
+    (values merchant-external-id product-id offer-id subject-id amount
+            currency-exponent)))
+
+;; Opaque because exposing the fields would expose merchant signing material.
+(struct pancake-merchant-client
+  (environment merchant-id private-key connect-timeout request-timeout
+               transport clock))
+
+(define merchant-id-rx #px"^MER_[A-Za-z0-9]+$")
+
+(define (positive-real? value)
+  (and (real? value) (positive? value)))
+
+(define (parse-private-key pem)
+  (with-handlers ([exn:fail?
+                   (lambda (_failure)
+                     (raise-commerce
+                      'pancake-merchant-private-key-invalid
+                      "Pancake merchant private key is invalid"))])
+    (unless (non-empty-string? pem)
+      (error 'parse-private-key "empty key"))
+    (define normalized
+      (string-replace
+       (string-replace (string-trim pem) "\\n" "\n") "\r\n" "\n"))
+    (define entry
+      (call-with-input-string
+       normalized
+       (lambda (in)
+         (read-pem in #:only (list #"PRIVATE KEY" #"RSA PRIVATE KEY")))))
+    (when (eof-object? entry)
+      (error 'parse-private-key "no supported private key entry"))
+    (define format
+      (cond
+        [(bytes=? (car entry) #"PRIVATE KEY") 'OneAsymmetricKey]
+        [(bytes=? (car entry) #"RSA PRIVATE KEY") 'RSAPrivateKey]
+        [else (error 'parse-private-key "unsupported private key entry")]))
+    (define key
+      (datum->pk-key (cdr entry) format (list libcrypto-factory)))
+    (unless (and (private-key? key)
+                 (equal? (take (pk-key->datum key 'rkt-private) 2)
+                         '(rsa private)))
+      (error 'parse-private-key "private key is not RSA signing key"))
+    key))
+
+(define (default-order-transport endpoint headers body connect-timeout
+                                 request-timeout)
+  (define response
+    (post endpoint
+          #:headers headers
+          #:data body
+          #:timeouts
+          (make-timeout-config #:connect connect-timeout
+                               #:request request-timeout)
+          #:max-attempts 1
+          #:max-redirects 0
+          #:stream? #t))
+  (dynamic-wind
+    void
+    (lambda ()
+      (define response-body-bytes
+        (sync/timeout
+         request-timeout
+         (read-bytes-evt (add1 max-order-response-bytes)
+                         (response-output response))))
+      (unless response-body-bytes
+        (error 'default-order-transport "response body timed out"))
+      (when (eof-object? response-body-bytes)
+        (set! response-body-bytes #""))
+      (when (> (bytes-length response-body-bytes) max-order-response-bytes)
+        (raise-commerce
+         'pancake-order-response-invalid
+         "Pancake order response exceeds the accepted size limit"))
+      (values (response-status-code response) response-body-bytes))
+    (lambda () (response-close! response))))
+
+(define (make-pancake-merchant-client
+         merchant-id private-key-pem
+         #:environment environment
+         #:connect-timeout-seconds
+         [connect-timeout default-connect-timeout-seconds]
+         #:request-timeout-seconds
+         [request-timeout default-request-timeout-seconds]
+         #:transport [transport default-order-transport]
+         #:clock [clock current-seconds])
+  (unless (and (string? merchant-id) (regexp-match? merchant-id-rx merchant-id))
+    (raise-arguments-error
+     'make-pancake-merchant-client
+     "merchant-id must use Pancake's MER_ identifier format"))
+  (unless (environment? environment)
+    (raise-argument-error
+     'make-pancake-merchant-client "(or/c 'test 'production)" environment))
+  (unless (positive-real? connect-timeout)
+    (raise-argument-error
+     'make-pancake-merchant-client "positive-real? for connect timeout"
+     connect-timeout))
+  (unless (positive-real? request-timeout)
+    (raise-argument-error
+     'make-pancake-merchant-client "positive-real? for request timeout"
+     request-timeout))
+  (unless (procedure? transport)
+    (raise-argument-error
+     'make-pancake-merchant-client "procedure? for transport" transport))
+  (unless (procedure? clock)
+    (raise-argument-error
+     'make-pancake-merchant-client "procedure? for clock" clock))
+  (pancake-merchant-client
+   environment merchant-id (parse-private-key private-key-pem)
+   connect-timeout request-timeout transport clock))
+
+(define onetime-order-query
+  #<<GRAPHQL
+query CommerceOnetimeOrder($id: ID!) {
+  onetimeOrder(id: $id) {
+    id
+    status
+    testMode
+    currency
+    orderMerchantExternalId
+    store { id }
+    onetimeProduct { id }
+    payments {
+      id
+      status
+      snapshotAmountDetails { currency total }
+    }
+  }
+}
+GRAPHQL
+  )
+
+(define (merchant-request-body order-id)
+  (jsexpr->bytes
+   (hash 'query onetime-order-query
+         'variables (hash 'id order-id))))
+
+(define (sign-merchant-request key timestamp body)
+  (with-handlers ([exn:fail?
+                   (lambda (_failure)
+                     (raise-commerce
+                      'pancake-request-signing-failed
+                      "Pancake merchant request could not be signed"))])
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (define body-hash (digest 'sha256 body))
+      (define body-hash-text
+        (bytes->string/utf-8 (base64-encode body-hash #:line #f)))
+      (define canonical
+        (string->bytes/utf-8
+         (string-append "POST\n" pancake-api-path "\n" timestamp "\n"
+                        body-hash-text)))
+      (bytes->string/utf-8
+       (base64-encode
+        (digest/sign key 'sha256 canonical #:pad 'pkcs1-v1.5)
+        #:line #f)))))
+
+(define (request-order client order-id)
+  (define now ((pancake-merchant-client-clock client)))
+  (unless (exact-nonnegative-integer? now)
+    (raise-commerce
+     'pancake-request-clock-invalid
+     "Pancake merchant request clock did not return UTC epoch seconds"))
+  (define timestamp (number->string now))
+  (define body (merchant-request-body order-id))
+  (define signature
+    (sign-merchant-request
+     (pancake-merchant-client-private-key client) timestamp body))
+  (define headers
+    (hash 'content-type "application/json"
+          'x-merchant-id (pancake-merchant-client-merchant-id client)
+          'x-timestamp timestamp
+          'x-signature signature))
+  (define-values (status response-body)
+    (with-handlers ([exn:fail:commerce? raise]
+                    [exn:fail?
+                     (lambda (_failure)
+                       (raise-commerce
+                        'pancake-order-unavailable
+                        "Pancake order query is temporarily unavailable"
+                        (hash 'retryable? #t)))])
+      ((pancake-merchant-client-transport client)
+       pancake-api-endpoint headers body
+       (pancake-merchant-client-connect-timeout client)
+       (pancake-merchant-client-request-timeout client))))
+  (unless (and (exact-integer? status) (bytes? response-body))
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order transport returned an invalid response"))
+  (when (> (bytes-length response-body) max-order-response-bytes)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response exceeds the accepted size limit"))
+  (cond
+    [(member status '(401 403))
+     (raise-commerce
+      'pancake-merchant-authentication-failed
+      "Pancake rejected the merchant credentials"
+      (hash 'status status 'retryable? #f))]
+    [(or (= status 408) (= status 429) (<= 500 status 599))
+     (raise-commerce
+      'pancake-order-unavailable
+      "Pancake order query is temporarily unavailable"
+      (hash 'status status 'retryable? #t))]
+    [(not (<= 200 status 299))
+     (raise-commerce
+      'pancake-order-query-rejected
+      "Pancake rejected the order query"
+      (hash 'status status 'retryable? #f))])
+  response-body)
+
+(define (parse-order-response response-body)
+  (define envelope
+    (with-handlers ([exn:fail?
+                     (lambda (_failure)
+                       (raise-commerce
+                        'pancake-order-response-invalid
+                        "Pancake order response is not valid JSON"))])
+      (bytes->jsexpr response-body)))
+  (unless (hash? envelope)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response must be a JSON object"))
+  (define errors (hash-ref envelope 'errors '()))
+  (unless (list? errors)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response has an invalid errors field"))
+  (unless (null? errors)
+    (raise-commerce
+     'pancake-order-query-rejected
+     "Pancake rejected the GraphQL order query"
+     (hash 'error-count (length errors) 'retryable? #f)))
+  (define data (hash-ref envelope 'data #f))
+  (unless (hash? data)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response is missing GraphQL data"))
+  (define order (hash-ref data 'onetimeOrder #f))
+  (when (equal? order (json-null))
+    (raise-commerce
+     'pancake-order-not-found
+     "Pancake one-time order was not found"
+     (hash 'retryable? #f)))
+  (unless (hash? order)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response is missing the one-time order"))
+  order)
+
+(define (required-response-string object field)
+  (define value (and (hash? object) (hash-ref object field #f)))
+  (unless (non-empty-string? value)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response is missing a required string field"
+     (hash 'field field)))
+  value)
+
+(define (strict-display-amount->minor value exponent)
+  (unless (string? value)
+    (raise-commerce
+     'pancake-amount-invalid
+     "Pancake payment total is not a valid display amount"))
+  (match (regexp-match #px"^(0|[1-9][0-9]*)(?:[.]([0-9]+))?$" value)
+    [(list _ whole fraction)
+     (define fraction-text (or fraction ""))
+     (when (> (string-length fraction-text) exponent)
+       (raise-commerce
+        'pancake-amount-invalid
+        "Pancake payment total exceeds the configured currency precision"))
+     (define padded-fraction
+       (string-append
+        fraction-text
+        (make-string (- exponent (string-length fraction-text)) #\0)))
+     (+ (* (string->number whole) (expt 10 exponent))
+        (if (string=? padded-fraction "")
+            0
+            (string->number padded-fraction)))]
+    [_
+     (raise-commerce
+      'pancake-amount-invalid
+      "Pancake payment total is not a valid display amount")]))
+
+(define (webhook-occurred-at timestamp)
+  (define matched
+    (and (string? timestamp)
+         (regexp-match
+          #px"^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]{1,9}))?Z$"
+          timestamp)))
+  (unless matched
+    (raise-commerce
+     'pancake-event-timestamp-invalid
+     "Pancake webhook event timestamp is invalid"))
+  (define numbers (map string->number (take (cdr matched) 6)))
+  (match-define (list year month day hour minute second) numbers)
+  (define epoch
+    (with-handlers ([exn:fail?
+                     (lambda (_failure)
+                       (raise-commerce
+                        'pancake-event-timestamp-invalid
+                        "Pancake webhook event timestamp is invalid"))])
+      (find-seconds second minute hour day month year #f)))
+  (define normalized (seconds->date epoch #f))
+  (unless (and (= year (date-year normalized))
+               (= month (date-month normalized))
+               (= day (date-day normalized))
+               (= hour (date-hour normalized))
+               (= minute (date-minute normalized))
+               (= second (date-second normalized)))
+    (raise-commerce
+     'pancake-event-timestamp-invalid
+     "Pancake webhook event timestamp is invalid"))
+  epoch)
+
+(define (mismatch code message field)
+  (raise-commerce code message (hash 'field field 'retryable? #f)))
+
+(define (verify-pancake-onetime-order client webhook binding)
+  (unless (pancake-merchant-client? client)
+    (raise-argument-error
+     'verify-pancake-onetime-order "pancake-merchant-client?" client))
+  (unless (pancake-webhook? webhook)
+    (raise-argument-error
+     'verify-pancake-onetime-order "pancake-webhook?" webhook))
+  (unless (pancake-order-binding? binding)
+    (raise-argument-error
+     'verify-pancake-onetime-order "pancake-order-binding?" binding))
+  (unless (string=? (pancake-webhook-event-type webhook) "order.completed")
+    (raise-commerce
+     'pancake-event-unsupported
+     "Pancake webhook is not a supported one-time purchase event"
+     (hash 'retryable? #f)))
+  (unless (eq? (pancake-merchant-client-environment client)
+               (pancake-webhook-environment webhook))
+    (mismatch 'pancake-environment-mismatch
+              "Pancake merchant client and webhook environments differ"
+              'environment))
+  (define webhook-data (pancake-webhook-data webhook))
+  (unless (hash? webhook-data)
+    (raise-commerce
+     'pancake-payload-invalid
+     "Verified Pancake webhook data must be a JSON object"))
+  (define order-id (hash-ref webhook-data 'orderId #f))
+  (unless (non-empty-string? order-id)
+    (raise-commerce
+     'pancake-payload-invalid
+     "Verified Pancake webhook data is missing orderId"
+     (hash 'field 'orderId)))
+  (define occurred-at (webhook-occurred-at (pancake-webhook-timestamp webhook)))
+
+  (define order (parse-order-response (request-order client order-id)))
+  (define actual-order-id (required-response-string order 'id))
+  (define status (required-response-string order 'status))
+  (define test-mode (hash-ref order 'testMode 'missing))
+  (unless (boolean? test-mode)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response has an invalid testMode field"
+     (hash 'field 'testMode)))
+  (define currency (required-response-string order 'currency))
+  (define external-id
+    (required-response-string order 'orderMerchantExternalId))
+  (define store-id
+    (required-response-string (hash-ref order 'store #f) 'id))
+  (define product-id
+    (required-response-string (hash-ref order 'onetimeProduct #f) 'id))
+  (define payments (hash-ref order 'payments #f))
+  (unless (list? payments)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response has an invalid payments field"
+     (hash 'field 'payments)))
+  (define matching-payments
+    (filter
+     (lambda (payment)
+       (and (hash? payment)
+            (equal? (hash-ref payment 'id #f)
+                    (pancake-webhook-event-id webhook))))
+     payments))
+  (when (null? matching-payments)
+    (mismatch 'pancake-payment-not-found
+              "Pancake webhook payment was not found on the active order"
+              'payment-id))
+  (unless (= (length matching-payments) 1)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response contains duplicate payment identifiers"
+     (hash 'field 'payments)))
+  (define payment (car matching-payments))
+  (define payment-status (required-response-string payment 'status))
+  (define amount-details (hash-ref payment 'snapshotAmountDetails #f))
+  (define payment-currency
+    (required-response-string amount-details 'currency))
+  (define payment-total
+    (required-response-string amount-details 'total))
+
+  (unless (string=? actual-order-id order-id)
+    (mismatch 'pancake-order-id-mismatch
+              "Pancake active order id does not match the webhook"
+              'order-id))
+  (unless (string=? status "completed")
+    (mismatch 'pancake-order-status-mismatch
+              "Pancake one-time order is not completed"
+              'status))
+  (unless (eq? test-mode
+               (eq? (pancake-webhook-environment webhook) 'test))
+    (mismatch 'pancake-environment-mismatch
+              "Pancake active order environment does not match the webhook"
+              'testMode))
+  (unless (string=? store-id (pancake-webhook-store-id webhook))
+    (mismatch 'pancake-store-mismatch
+              "Pancake active order store does not match the webhook"
+              'store-id))
+  (unless (string=? external-id
+                    (pancake-order-binding-merchant-external-id binding))
+    (mismatch 'pancake-order-binding-mismatch
+              "Pancake active order does not match the checkout binding"
+              'orderMerchantExternalId))
+  (unless (string=? product-id (pancake-order-binding-product-id binding))
+    (mismatch 'pancake-product-mismatch
+              "Pancake active order product does not match the Offer mapping"
+              'product-id))
+  (define expected-money (pancake-order-binding-amount binding))
+  (unless (and (string=? currency (money-currency expected-money))
+               (string=? payment-currency (money-currency expected-money)))
+    (mismatch 'pancake-currency-mismatch
+              "Pancake active order currency does not match the Offer"
+              'currency))
+  (unless (string=? payment-status "succeeded")
+    (mismatch 'pancake-payment-status-mismatch
+              "Pancake active order payment is not succeeded"
+              'payment-status))
+  (define actual-minor
+    (strict-display-amount->minor
+     payment-total (pancake-order-binding-currency-exponent binding)))
+  (unless (= actual-minor (money-minor-units expected-money))
+    (mismatch 'pancake-amount-mismatch
+              "Pancake active payment amount does not match the Offer"
+              'amount))
+
+  (make-verified-payment-event
+   "pancake"
+   (pancake-webhook-id webhook)
+   (pancake-webhook-payload-digest webhook)
+   'payment-succeeded
+   order-id
+   (pancake-order-binding-offer-id binding)
+   (pancake-order-binding-subject-id binding)
+   expected-money
+   occurred-at))

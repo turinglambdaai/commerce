@@ -45,7 +45,32 @@ Pancake 边缘模块在显式环境中认证原始请求字节：
                           #:environment 'test))
 ```
 
-`verified` 仍是渠道原生证据，不是规范支付事件；履约前仍须主动查单。
+`verified` 仍是渠道原生证据，不是规范支付事件。服务随后提供服务端保存的结账
+绑定与商户凭据：
+
+```racket
+(define merchant
+  (make-pancake-merchant-client
+   "MER_yourMerchant"
+   (getenv "PANCAKE_MERCHANT_PRIVATE_KEY")
+   #:environment 'test))
+
+(define binding
+  (pancake-order-binding
+   "random-checkout-reference" ; 创建结账时保存
+   "PROD_providerProduct"
+   "taskly-pro-lifetime"
+   "opaque-stable-subject"
+   (money "USD" 2900)
+   2))                         ; 配置明确的 ISO 4217 小数位
+
+(define canonical-event
+  (verify-pancake-onetime-order merchant verified binding))
+```
+
+主动证明要求订单已完成，且 Webhook 指向的支付成功；环境、商店、外部引用、商品、
+币种和精确金额必须全部一致。私钥只由部署注入，绝不提交。外部引用在服务端存储
+中解析到 Offer 与稳定主体；它不是邮箱、主体 id 或客户端提供的声明。
 
 ## 3. 跑通第一笔购买
 
@@ -74,6 +99,7 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
 - 什么证据能证明确认结果可以跨服务重启保留？
 - 实际写出的数据库行是什么，普通 SQL 能否篡改它？
 - Pancake 到底签了哪些原始字节，过期、跨环境或有歧义的已签请求如何关闭失败？
+- 商户查单请求具体签了什么，主动订单中任一字段被替换时为何无法产生规范事件？
 
 ## 5. 理解边界
 
@@ -98,6 +124,6 @@ raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-首个真实渠道是 Pancake。签名协议一致性已经实现；主动查单、持久处理与真实
-sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
+首个真实渠道是 Pancake。签名协议一致性与一次性订单主动查验已经实现；持久
+处理与真实 sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
 

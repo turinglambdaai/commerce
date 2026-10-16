@@ -71,8 +71,9 @@ headless service core may not depend on a UI framework.
   only public constructor for verified canonical payment events.
 - `(require commerce/journal)` defines durable acceptance semantics;
   `(require commerce/journal/sqlite)` selects the first filesystem backend.
-- `(require commerce/pancake)` authenticates exact Pancake webhook bytes and
-  returns provider-native evidence; it does not construct canonical events.
+- `(require commerce/pancake)` authenticates exact Pancake webhook bytes, signs
+  the bounded merchant order read, and constructs a canonical event only after
+  the active one-time order matches its server-side checkout binding.
 - Network listeners, persistence, provider SDKs, and Permit issuer adapters use
   explicit modules and are never re-exported from `commerce`.
 - Implementation-only helpers belong under `commerce/private/`.

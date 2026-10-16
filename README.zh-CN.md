@@ -19,7 +19,8 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 ## 快速开始
 
 当前版本已经包含纯事件核心、重放冲突防护、订单投影、权益意图、渠道边界、
-持久 SQLite 原始事件 journal、Pancake 原始字节验签、测试和一条完整的购买演示。
+持久 SQLite 原始事件 journal、Pancake 原始字节验签与一次性订单主动查验、测试
+和一条完整的购买演示。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -113,7 +114,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/provider)  ; 服务端渠道 adapter 边界
 (require commerce/journal)   ; 持久事件接收契约
 (require commerce/journal/sqlite) ; SQLite journal 后端
-(require commerce/pancake)   ; Pancake Webhook 原始字节验签
+(require commerce/pancake)   ; Pancake 鉴权与主动订单证明
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -133,18 +134,21 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   不可变保护；
 - Pancake RSA-SHA256 原始字节验签，包含显式环境密钥、有限重放窗口、mode 绑定
   和脱敏的类型化错误；
+- 带商户签名的 Pancake GraphQL 查单：在构造规范支付事件前，将已完成的一次性
+  订单与商店、环境、外部结账引用、商品、成功支付、精确币种/金额、稳定主体和
+  Offer 全部绑定；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
-- Pancake HTTP/主动查单集成或 ZPAY adapter；
 - 订单投影/outbox 持久化与 Webhook HTTP 端点；
+- ZPAY 或应用商店 adapter；
 - Permit issuer 集成和 credential 交付；
 - 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的“Webhook 认证后主动查询
-Pancake 订单”。缺口保持公开，避免把架构完成误当成生产就绪。
+下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的“订单投影与签发 outbox
+同事务持久化”。缺口保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 

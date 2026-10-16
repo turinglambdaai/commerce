@@ -119,8 +119,8 @@ top-level fields are rejected.
 
 The returned value exposes environment, envelope identifiers, event and store
 metadata, data, immutable raw bytes, their SHA-256 digest, and the signature
-timestamp through the @tt{pancake-webhook-*} accessors. It is not a canonical
-@tt{payment-event}; active order verification remains required.
+timestamp through the @tt{pancake-webhook-*} accessors. It is provider-native
+evidence and is not yet a canonical @tt{payment-event}.
 
 @verbatim{
 (pancake-webhook-keyring test-public-key production-public-key)
@@ -133,6 +133,57 @@ failures raise redacted @tt{exn:fail:commerce} values; raw bodies, signatures,
 and key contents are never included. Codes distinguish missing or malformed
 signature headers, invalid or out-of-window timestamps, invalid signatures,
 invalid configured public keys, invalid payloads, and environment mismatch.
+
+@subsection{Pancake active one-time order verification}
+
+@verbatim{
+(pancake-order-binding
+ merchant-external-id product-id offer-id subject-id amount currency-exponent)
+ -> pancake-order-binding?
+}
+
+Records the server-side expectation created with checkout. The merchant
+external id is a random correlation reference of at most 128 characters. It
+maps locally to one provider product, stable Offer, opaque stable subject,
+expected @tt{money} value, and explicit ISO 4217 exponent from zero through
+four. It must not contain or substitute for the subject identity.
+
+@verbatim{
+(make-pancake-merchant-client
+ merchant-id private-key-pem
+ #:environment environment
+ [#:connect-timeout-seconds connect-timeout]
+ [#:request-timeout-seconds request-timeout]
+ [#:transport transport]
+ [#:clock clock])
+ -> pancake-merchant-client?
+}
+
+Creates an opaque server-side client. The RSA private key is parsed once and is
+not exposed by accessors. The client signs one @tt{POST /v1/graphql} merchant
+read with RSA-SHA256/PKCS#1 v1.5. Both environments use
+@tt{https://api.waffo.ai/v1/graphql}; the explicit environment is verified
+against the returned order's @tt{testMode}. Defaults are five seconds to
+connect and ten seconds for response headers and body. Reads follow no
+redirects, carry no idempotency key, and make no implicit retry.
+
+@verbatim{
+(verify-pancake-onetime-order client webhook binding) -> payment-event?
+}
+
+Requires an authenticated @tt{order.completed} webhook, actively reads its
+one-time order, and checks order id, completed status, environment, store,
+merchant external id, product, the webhook payment id and succeeded status,
+currency, and exact payment total. Decimal display money is converted directly
+to configured minor units without floating point. Only a complete match
+constructs the canonical event.
+
+Transport failure and HTTP 408/429/5xx raise retryable
+@tt{pancake-order-unavailable}. Merchant authentication, GraphQL rejection,
+missing or malformed orders, and each semantic mismatch have separate typed,
+redacted codes. The optional transport and clock arguments on
+@tt{make-pancake-merchant-client} exist for deterministic integration testing;
+production callers normally leave them at their secure defaults.
 
 @section{Durable event journal}
 

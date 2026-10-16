@@ -22,8 +22,8 @@ rights. Commerce owns the durable orchestration between them.
 
 The current release provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
-event journal, exact-byte Pancake webhook authentication, tests, and one
-runnable purchase walkthrough.
+event journal, exact-byte Pancake webhook authentication, active Pancake
+one-time-order verification, tests, and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -125,7 +125,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/provider)  ; server-side provider adapter boundary
 (require commerce/journal)   ; durable event-acceptance contract
 (require commerce/journal/sqlite) ; SQLite journal backend
-(require commerce/pancake)   ; Pancake webhook authentication
+(require commerce/pancake)   ; Pancake authentication and active order proof
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -146,18 +146,22 @@ Implemented now:
   conflicting-replay rejection, and database-enforced immutable rows;
 - exact-byte Pancake RSA-SHA256 verification with explicit environment keys,
   bounded replay tolerance, mode binding, and redacted typed failures;
+- signed Pancake merchant GraphQL reads that bind a completed one-time order to
+  its store, environment, external checkout reference, product, succeeded
+  payment, exact currency/amount, stable subject, and Offer before constructing
+  a canonical payment event;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
-- Pancake HTTP/order-query integration or a ZPAY adapter;
 - durable order projections/outbox and webhook HTTP endpoints;
+- ZPAY or app-store adapters;
 - Permit issuer integration and credential delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is active Pancake order verification after webhook
-authentication, as described in [ROADMAP.md](ROADMAP.md). Honest gaps remain
+The next bounded slice is transactional durable order projection plus issuance
+outbox insertion, as described in [ROADMAP.md](ROADMAP.md). Honest gaps remain
 visible so architecture does not get mistaken for production readiness.
 
 ## Development

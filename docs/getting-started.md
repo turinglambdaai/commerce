@@ -46,8 +46,34 @@ The Pancake edge authenticates exact request bytes in an explicit environment:
                           #:environment 'test))
 ```
 
-`verified` is provider-native evidence, not a canonical payment event. Active
-order verification is still required before fulfillment.
+`verified` is provider-native evidence, not yet a canonical payment event. A
+service next supplies the server-side checkout binding and merchant credential:
+
+```racket
+(define merchant
+  (make-pancake-merchant-client
+   "MER_yourMerchant"
+   (getenv "PANCAKE_MERCHANT_PRIVATE_KEY")
+   #:environment 'test))
+
+(define binding
+  (pancake-order-binding
+   "random-checkout-reference" ; stored when checkout is created
+   "PROD_providerProduct"
+   "taskly-pro-lifetime"
+   "opaque-stable-subject"
+   (money "USD" 2900)
+   2))                         ; configured ISO 4217 exponent
+
+(define canonical-event
+  (verify-pancake-onetime-order merchant verified binding))
+```
+
+The active proof requires a completed order and succeeded webhook payment whose
+environment, store, external reference, product, currency, and exact amount all
+match. The private key is deployment-injected and never committed. The external
+reference resolves to the Offer and stable subject in server storage; it is not
+an email, subject id, or client-provided claim.
 
 ## 3. Run the first purchase
 
@@ -78,6 +104,8 @@ The tests show the intended answers to the first difficult questions:
 - What database row is emitted, and can ordinary SQL mutate it?
 - What exact Pancake bytes are signed, and how do stale, cross-environment, or
   ambiguous signed requests fail?
+- What exact merchant request is signed, and how does every active order
+  substitution fail before a canonical event exists?
 
 ## 5. Understand the boundary
 
@@ -103,7 +131,7 @@ raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-The first production provider is Pancake. Signature conformance is implemented;
-active order lookup, durable processing, and live sandbox evidence remain
-separate M1 gates in [ROADMAP.md](../ROADMAP.md).
+The first production provider is Pancake. Signature conformance and active
+one-time-order verification are implemented; durable processing and live
+sandbox evidence remain separate M1 gates in [ROADMAP.md](../ROADMAP.md).
 

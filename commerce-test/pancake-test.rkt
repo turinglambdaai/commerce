@@ -1,9 +1,16 @@
 #lang racket/base
 
-(require commerce
+(require base64
+         commerce
          commerce/pancake
+         crypto
+         crypto/libcrypto
+         json
          rackunit
          racket/file
+         racket/list
+         racket/match
+         racket/port
          racket/runtime-path
          racket/string)
 
@@ -224,3 +231,340 @@
      (pancake-webhook-keyring
       test-key
       (string-replace test-key "\n" "\r\n")))))
+
+;; Active order verification uses a generated key and a deterministic transport.
+;; No merchant credential or live Pancake response is committed to the package.
+(define merchant-private-key
+  (parameterize ([crypto-factories (list libcrypto-factory)])
+    (generate-private-key (get-pk 'rsa) '((nbits 2048)))))
+
+(define (key-datum->pem label bytes)
+  (define encoded
+    (bytes->string/utf-8
+     (base64-encode bytes #:line #f)))
+  (string-append
+   "-----BEGIN " label "-----\n"
+   (string-join (regexp-match* #px".{1,64}" encoded) "\n")
+   "\n-----END " label "-----\n"))
+
+(define (private-key->pem key)
+  (key-datum->pem "PRIVATE KEY" (pk-key->datum key 'OneAsymmetricKey)))
+
+(define merchant-private-key-pem (private-key->pem merchant-private-key))
+(define merchant-public-key
+  (pk-key->public-only-key merchant-private-key))
+(define merchant-public-key-pem
+  (key-datum->pem "PUBLIC KEY"
+                  (pk-key->datum merchant-public-key 'SubjectPublicKeyInfo)))
+
+(define (signed-test-webhook event-type
+                             #:timestamp
+                             [timestamp "2026-10-16T00:00:00.000Z"]
+                             #:data [data (hash 'orderId "ORD_fixture_001")])
+  (define body
+    (jsexpr->bytes
+     (hash 'id "evt_dynamic_001"
+           'timestamp timestamp
+           'eventType event-type
+           'eventId "PAY_fixture_001"
+           'storeId "STO_fixture_001"
+           'storeName "Fixture Store"
+           'data data
+           'mode "test")))
+  (define signed-bytes
+    (bytes-append #"1792108800000." body))
+  (define signature
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (digest/sign merchant-private-key 'sha256 signed-bytes
+                   #:pad 'pkcs1-v1.5)))
+  (verify-pancake-webhook
+   body
+   (string-append
+    "t=1792108800000,v1="
+    (bytes->string/utf-8 (base64-encode signature #:line #f)))
+   #:environment 'test
+   #:keyring
+   (pancake-webhook-keyring merchant-public-key-pem
+                            (fixture-string "production-public.pem"))
+   #:now-ms signed-at))
+
+(define default-binding
+  (pancake-order-binding
+   "commerce-checkout-fixture-001"
+   "PROD_fixture_001"
+   "taskly-pro-lifetime"
+   "subject-fixture-001"
+   (money "USD" 2900)
+   2))
+
+(define (order-response
+         #:order-id [order-id "ORD_fixture_001"]
+         #:status [status "completed"]
+         #:test-mode [test-mode #t]
+         #:order-currency [order-currency "USD"]
+         #:external-id [external-id "commerce-checkout-fixture-001"]
+         #:store-id [store-id "STO_fixture_001"]
+         #:product-id [product-id "PROD_fixture_001"]
+         #:payment-id [payment-id "PAY_fixture_001"]
+         #:payment-status [payment-status "succeeded"]
+         #:payment-currency [payment-currency "USD"]
+         #:payment-total [payment-total "29.00"])
+  (jsexpr->bytes
+   (hash
+    'data
+    (hash
+     'onetimeOrder
+     (hash 'id order-id
+           'status status
+           'testMode test-mode
+           'currency order-currency
+           'orderMerchantExternalId external-id
+           'store (hash 'id store-id)
+           'onetimeProduct (hash 'id product-id)
+           'payments
+           (list
+            (hash 'id payment-id
+                  'status payment-status
+                  'snapshotAmountDetails
+                  (hash 'currency payment-currency
+                        'total payment-total))))))))
+
+(define (make-captured-client response-body
+                              #:status [status 200]
+                              #:environment [environment 'test]
+                              #:capture [capture (box #f)])
+  (values
+   (make-pancake-merchant-client
+    "MER_fixture001"
+    merchant-private-key-pem
+    #:environment environment
+    #:clock (lambda () 1792108800)
+    #:transport
+    (lambda (endpoint headers body connect-timeout request-timeout)
+      (set-box! capture
+                (list endpoint headers body connect-timeout request-timeout))
+      (values status response-body)))
+   capture))
+
+(define (verify-order-with-response response-body
+                                    #:status [status 200]
+                                    #:binding [binding default-binding]
+                                    #:environment [environment 'test])
+  (define-values (client _capture)
+    (make-captured-client response-body
+                          #:status status
+                          #:environment environment))
+  (verify-pancake-onetime-order client (verify valid-body valid-header) binding))
+
+(test-case "active query is signed exactly and yields a canonical payment event"
+  (define-values (client capture)
+    (make-captured-client (order-response)))
+  (define event
+    (verify-pancake-onetime-order client (verify valid-body valid-header)
+                                  default-binding))
+  (check-equal? (payment-event-provider event) "pancake")
+  (check-equal? (payment-event-event-id event) "evt_fixture_001")
+  (check-eq? (payment-event-kind event) 'payment-succeeded)
+  (check-equal? (payment-event-order-id event) "ORD_fixture_001")
+  (check-equal? (payment-event-offer-id event) "taskly-pro-lifetime")
+  (check-equal? (payment-event-subject-id event) "subject-fixture-001")
+  (check-equal? (payment-event-amount event) (money "USD" 2900))
+  (check-equal? (payment-event-occurred-at event) 1792108800)
+
+  (match-define
+    (list endpoint headers request-body connect-timeout request-timeout)
+    (unbox capture))
+  (check-equal? endpoint "https://api.waffo.ai/v1/graphql")
+  (check-equal? connect-timeout 5)
+  (check-equal? request-timeout 10)
+  (check-equal? (hash-ref headers 'content-type) "application/json")
+  (check-equal? (hash-ref headers 'x-merchant-id) "MER_fixture001")
+  (check-equal? (hash-ref headers 'x-timestamp) "1792108800")
+  (check-false (hash-has-key? headers 'x-idempotency-key))
+  (define request-json (bytes->jsexpr request-body))
+  (check-equal? (hash-ref (hash-ref request-json 'variables) 'id)
+                "ORD_fixture_001")
+  (define body-hash
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (digest 'sha256 request-body)))
+  (define canonical
+    (string->bytes/utf-8
+     (string-append
+      "POST\n/v1/graphql\n1792108800\n"
+      (bytes->string/utf-8 (base64-encode body-hash #:line #f)))))
+  (define signature
+    (base64-decode
+     (string->bytes/utf-8 (hash-ref headers 'x-signature))))
+  (check-true
+   (parameterize ([crypto-factories (list libcrypto-factory)])
+     (digest/verify merchant-public-key 'sha256 canonical signature
+                    #:pad 'pkcs1-v1.5))))
+
+(test-case "event semantics are rejected before network access"
+  (define calls 0)
+  (define client
+    (make-pancake-merchant-client
+     "MER_fixture001"
+     merchant-private-key-pem
+     #:environment 'test
+     #:clock (lambda () 1792108800)
+     #:transport
+     (lambda _arguments
+       (set! calls (add1 calls))
+       (values 200 (order-response)))))
+  (define wrong-event (signed-test-webhook "refund.succeeded"))
+  (check-exn (commerce-code? 'pancake-event-unsupported)
+             (lambda ()
+               (verify-pancake-onetime-order client wrong-event
+                                             default-binding)))
+  (check-exn
+   (commerce-code? 'pancake-event-timestamp-invalid)
+   (lambda ()
+     (verify-pancake-onetime-order
+      client
+      (signed-test-webhook "order.completed"
+                           #:timestamp "2026-02-30T00:00:00Z")
+      default-binding)))
+  (check-exn
+   (commerce-code? 'pancake-payload-invalid)
+   (lambda ()
+     (verify-pancake-onetime-order
+      client
+      (signed-test-webhook "order.completed" #:data "not-an-object")
+      default-binding)))
+  (define production-client
+    (make-pancake-merchant-client
+     "MER_fixture001" merchant-private-key-pem
+     #:environment 'production
+     #:transport
+     (lambda _arguments
+       (set! calls (add1 calls))
+       (values 200 (order-response)))))
+  (check-exn
+   (commerce-code? 'pancake-environment-mismatch)
+   (lambda ()
+     (verify-pancake-onetime-order
+      production-client (verify valid-body valid-header) default-binding)))
+  (check-equal? calls 0))
+
+(test-case "active order verification rejects every substituted authority field"
+  (define cases
+    (list
+     (cons 'pancake-order-id-mismatch
+           (order-response #:order-id "ORD_other"))
+     (cons 'pancake-order-status-mismatch
+           (order-response #:status "pending"))
+     (cons 'pancake-environment-mismatch
+           (order-response #:test-mode #f))
+     (cons 'pancake-store-mismatch
+           (order-response #:store-id "STO_other"))
+     (cons 'pancake-order-binding-mismatch
+           (order-response #:external-id "commerce-checkout-other"))
+     (cons 'pancake-product-mismatch
+           (order-response #:product-id "PROD_other"))
+     (cons 'pancake-currency-mismatch
+           (order-response #:order-currency "EUR"))
+     (cons 'pancake-payment-not-found
+           (order-response #:payment-id "PAY_other"))
+     (cons 'pancake-payment-status-mismatch
+           (order-response #:payment-status "pending"))
+     (cons 'pancake-currency-mismatch
+           (order-response #:payment-currency "EUR"))
+     (cons 'pancake-amount-mismatch
+           (order-response #:payment-total "29.01"))))
+  (for ([case (in-list cases)])
+    (check-exn (commerce-code? (car case))
+               (lambda () (verify-order-with-response (cdr case))))))
+
+(test-case "display money conversion is exact and exponent-aware"
+  (check-equal?
+   (payment-event-amount
+    (verify-order-with-response (order-response #:payment-total "29")))
+   (money "USD" 2900))
+  (check-equal?
+   (payment-event-amount
+    (verify-order-with-response (order-response #:payment-total "29.0")))
+   (money "USD" 2900))
+  (for ([bad (in-list '("29.000" "1e2" "+29.00" "-1.00" "00.10"))])
+    (check-exn
+     (commerce-code? 'pancake-amount-invalid)
+     (lambda ()
+       (verify-order-with-response (order-response #:payment-total bad))))))
+
+(test-case "GraphQL and HTTP failures remain typed and redacted"
+  (check-exn
+   (commerce-code? 'pancake-order-not-found)
+   (lambda ()
+     (verify-order-with-response #"{\"data\":{\"onetimeOrder\":null}}")))
+  (check-exn
+   (commerce-code? 'pancake-order-query-rejected)
+   (lambda ()
+     (verify-order-with-response
+      #"{\"data\":null,\"errors\":[{\"message\":\"sensitive provider detail\"}]}")))
+  (check-exn
+   (commerce-code? 'pancake-merchant-authentication-failed)
+   (lambda () (verify-order-with-response #"{}" #:status 401)))
+  (check-exn
+   (commerce-code? 'pancake-order-unavailable)
+   (lambda () (verify-order-with-response #"{}" #:status 503)))
+  (check-exn
+   (commerce-code? 'pancake-order-response-invalid)
+   (lambda () (verify-order-with-response #"not-json")))
+  (check-exn
+   (commerce-code? 'pancake-order-response-invalid)
+   (lambda ()
+     (verify-order-with-response (make-bytes (add1 (* 1024 1024)) 65)))))
+
+(test-case "transport failures are retryable and do not leak causes"
+  (define client
+    (make-pancake-merchant-client
+     "MER_fixture001"
+     merchant-private-key-pem
+     #:environment 'test
+     #:transport
+     (lambda _arguments
+       (error 'transport "secret endpoint detail ORD_fixture_001"))))
+  (with-handlers ([exn:fail:commerce?
+                   (lambda (failure)
+                     (check-eq? (exn:fail:commerce-code failure)
+                                'pancake-order-unavailable)
+                     (check-true
+                      (hash-ref (exn:fail:commerce-data failure) 'retryable?))
+                     (check-false
+                      (string-contains? (exn-message failure)
+                                        "ORD_fixture_001"))
+                     (check-false
+                      (string-contains?
+                       (format "~s" (exn:fail:commerce-data failure))
+                       "ORD_fixture_001")))])
+    (verify-pancake-onetime-order client (verify valid-body valid-header)
+                                  default-binding)
+    (fail "transport failure was accepted")))
+
+(test-case "merchant client rejects invalid credentials without echoing secrets"
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (make-pancake-merchant-client
+                "not-a-merchant" merchant-private-key-pem
+                #:environment 'test)))
+  (with-handlers ([exn:fail:commerce?
+                   (lambda (failure)
+                     (check-eq? (exn:fail:commerce-code failure)
+                                'pancake-merchant-private-key-invalid)
+                     (check-false
+                      (string-contains? (exn-message failure) "not-secret")))])
+    (make-pancake-merchant-client
+     "MER_fixture001" "not-secret" #:environment 'test)
+    (fail "invalid private key was accepted")))
+
+(test-case "binding validates money scale and stable identifiers"
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (pancake-order-binding
+                "binding" "PROD_x" "Not Stable" "subject"
+                (money "USD" 100) 2)))
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (pancake-order-binding
+                "binding" "PROD_x" "stable-offer" "subject"
+                (money "USD" 100) 5))))

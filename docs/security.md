@@ -36,10 +36,23 @@ acceptance. Duplicate signature fields, duplicate top-level JSON fields, and a
 signed payload whose `mode` disagrees with the selected environment fail
 closed. Durable `(provider, event-id)` journal idempotency remains mandatory.
 
-Pancake authentication failures expose typed codes and minimal metadata only.
+After webhook authentication, a one-time purchase is actively read through the
+signed merchant GraphQL endpoint. Commerce accepts it only when order id,
+completed status, environment, store, random checkout-binding reference,
+provider product, succeeded payment id, currency, and exact minor-unit amount
+all match server-side expectations. The binding resolves to an opaque stable
+subject locally; email, redirect parameters, metadata, and provider customer
+identities cannot select the entitlement owner. GraphQL responses are size and
+time bounded, redirects and implicit transport retries are disabled, and
+retryable provider unavailability remains distinct from terminal semantic
+rejection.
+
+Pancake authentication and active-order failures expose typed codes and minimal
+metadata only.
 Raw payloads, signature headers, decoded signatures, key contents, underlying
-parser/crypto messages, and customer/order values are forbidden from ordinary
-errors and logs. A SHA-256 payload digest is safe correlation metadata.
+parser/crypto/transport messages, GraphQL error messages, and customer/order
+values are forbidden from ordinary errors and logs. A SHA-256 payload digest
+is safe correlation metadata.
 
 SQLite journal rows are protected against application-level `UPDATE` and
 `DELETE` by schema triggers. The journal API also recomputes the SHA-256 digest

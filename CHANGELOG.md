@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add signed Pancake merchant GraphQL reads and active one-time-order
+  verification. A completed order must match its webhook, environment, store,
+  checkout binding, product, succeeded payment, currency, and exact minor-unit
+  amount before `commerce/pancake` constructs a canonical payment event.
 - Add `commerce/pancake`, an explicit exact-byte RSA-SHA256 webhook verifier
   with test/production key isolation, asymmetric replay windows, mode binding,
   duplicate-field rejection, redacted typed failures, and independently

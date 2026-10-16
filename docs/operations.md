@@ -58,6 +58,16 @@ The operator surface distinguishes:
 Every retry is bounded and observable. Poison work moves to a quarantine queue
 with the typed reason and safe replay command.
 
+Pancake active reads make one transport attempt with a five-second connect
+limit and separate ten-second limits for receiving response headers and the
+bounded response body. Commerce does not retry inside the adapter.
+`pancake-order-unavailable` carries
+`retryable? #t` for transport failure, HTTP 408/429, or provider 5xx; the
+durable worker owns exponential backoff and retry limits for the whole journaled
+event. Merchant authentication, query rejection, not-found, malformed response,
+and semantic mismatch require configuration repair or operator review rather
+than an immediate tight loop.
+
 ## Backup and restore
 
 Production requires encrypted, versioned backups of journal, projections,
