@@ -15,9 +15,10 @@ module would make it easy to use server-only powers in the wrong process.
 event fields, immutable projections, and deterministic transitions.
 
 `(require commerce/provider)` is an explicit server-side boundary and owns the
-constructor for verified canonical payment events. Future network, persistence,
-and Permit issuer modules remain explicit and are not re-exported by the default
-facade.
+constructor for verified canonical payment events. Journal protocol and SQLite
+persistence live in the explicit `commerce/journal` and
+`commerce/journal/sqlite` modules. Future network and Permit issuer modules
+follow the same rule and are not re-exported by the default facade.
 
 ## Consequences
 

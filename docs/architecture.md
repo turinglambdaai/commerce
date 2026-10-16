@@ -89,11 +89,13 @@ The repository starts as one deployable service with strict internal tiers:
 commerce                 pure public facade
 commerce/core            deterministic model and transitions
 commerce/provider        explicit server-side adapter contract
+commerce/journal         durable acceptance protocol
+commerce/journal/sqlite  SQLite raw-event journal backend
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
 commerce/server          HTTP edge and lifecycle
-commerce/storage         journal/projection/outbox transaction
+commerce/storage         projection/outbox transaction
 commerce/pancake         Pancake protocol adapter
 commerce/zpay            ZPAY protocol adapter
 commerce/permit          Permit issuer and claim delivery

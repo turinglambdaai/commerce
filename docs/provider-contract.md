@@ -50,6 +50,22 @@ Return the provider's required success acknowledgement only after durable
 journal acceptance. Slow signing, email, or product delivery happens after the
 request through the outbox.
 
+The initial durable boundary is explicit:
+
+```racket
+(require commerce/journal
+         commerce/journal/sqlite)
+
+(define journal (open-sqlite-event-journal database-path))
+(journal-accept! journal raw-request canonical-event
+                 #:received-at receive-time)
+```
+
+`journal-accept!` recomputes the SHA-256 digest from the exact bytes. It returns
+`accepted` only after the SQLite transaction commits, returns `replayed` for an
+exact retry, and raises `event-conflict` for changed raw or canonical content.
+Only `accepted` and `replayed` are acknowledgement outcomes.
+
 ## Reconciliation
 
 Webhook delivery is not the only evidence path. Every production adapter with a

@@ -3,12 +3,12 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is the first unchecked M1 slice. Take only the
-immutable raw-event journal and its persistence boundary; do not add projection,
-outbox, the Pancake network adapter, Permit signing, or claim delivery in the
-same change. Record the chosen persistence contract in an ADR, cover durable
-acceptance plus exact/conflicting replay with red/green tests, inspect emitted
-rows as evidence, and leave the following unchecked item as the next handoff.
+The next implementation handoff is the first unchecked M1 slice. Take only
+Pancake signature verification with captured valid and invalid fixtures. Do not
+add active order lookup, projection persistence, outbox, Permit signing, or
+claim delivery in the same change. Record the exact signed representation,
+timestamp/replay rules, environment separation, and redaction requirements
+before implementing the adapter.
 
 ## M0 — Architecture foundation
 
@@ -23,7 +23,7 @@ rows as evidence, and leave the following unchecked item as the next handoff.
 
 ## M1 — Pancake one-time purchase
 
-- [ ] Immutable raw webhook journal
+- [x] Immutable raw webhook journal
 - [ ] Pancake signature verification with captured test fixtures
 - [ ] Active order verification before fulfillment
 - [ ] Durable order projection and transactional issuance outbox

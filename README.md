@@ -2,7 +2,7 @@
 
 **One commercial truth for every product — payment events in, signed product rights out.**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-architecture%20foundation-C15F3C)
+[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M1%20journal-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -20,9 +20,9 @@ rights. Commerce owns the durable orchestration between them.
 
 ## Quick start
 
-The first release is an architecture foundation. It already provides the pure
-event core, replay/conflict protection, order projections, rights intents, a
-provider boundary, tests, and one runnable purchase walkthrough.
+The current release provides the pure event core, replay/conflict protection,
+order projections, rights intents, a provider boundary, a durable SQLite raw
+event journal, tests, and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -122,11 +122,13 @@ only the identifiers and projections required for deterministic orchestration.
 ```racket
 (require commerce)           ; pure domain model and state transitions
 (require commerce/provider)  ; server-side provider adapter boundary
+(require commerce/journal)   ; durable event-acceptance contract
+(require commerce/journal/sqlite) ; SQLite journal backend
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
 acceptance, network listeners, databases, or Permit signing. Those capabilities
-belong to explicit server-side modules as they are implemented.
+belong to explicit server-side modules.
 
 ## Current status
 
@@ -138,25 +140,28 @@ Implemented now:
 - order projections that tolerate refund-before-payment delivery;
 - deterministic `grant` and `withdraw` rights intents;
 - a provider adapter contract and mock walkthrough;
+- a durable SQLite raw-event journal with digest verification, exact replay,
+  conflicting-replay rejection, and database-enforced immutable rows;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - Pancake or ZPAY network adapters;
-- durable SQL storage and webhook HTTP endpoints;
+- durable order projections/outbox and webhook HTTP endpoints;
 - Permit issuer integration and credential delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is the Pancake one-time-purchase path described in
-[ROADMAP.md](ROADMAP.md). Honest gaps are kept visible so architecture does not
-get mistaken for production readiness.
+The next bounded slice is Pancake signature verification with captured fixtures,
+as described in [ROADMAP.md](ROADMAP.md). Honest gaps are kept visible so
+architecture does not get mistaken for production readiness.
 
 ## Development
 
 ```bash
 raco pkg install --auto --no-docs --name commerce .
-raco make commerce/main.rkt commerce/provider.rkt \
+raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
+  commerce/journal/sqlite.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

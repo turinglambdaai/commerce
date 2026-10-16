@@ -31,6 +31,21 @@ for a bounded moving window. It ingests missing facts through the same adapter
 path and reports unexplained differences. It never silently rewrites journal
 history.
 
+## Journal evidence
+
+The SQLite journal uses application id `COMM` and schema version 1. Operational
+inspection should select identifiers and status metadata, not `raw_payload`:
+
+```sql
+SELECT sequence, provider, event_id, event_kind, order_id, received_at
+FROM commerce_event_journal
+ORDER BY sequence;
+```
+
+Rows reject ordinary `UPDATE` and `DELETE`. Repair or future retention requires
+a versioned, audited database operation; disabling the triggers for routine
+customer support is not a supported workflow.
+
 ## Stuck work
 
 The operator surface distinguishes:

@@ -28,6 +28,11 @@ defaults are part of the domain model, not deployment polish.
 9. Redact secrets and personal data structurally before logging.
 10. Separate live/test databases, secrets, keys, provider ids, and hostnames.
 
+SQLite journal rows are protected against application-level `UPDATE` and
+`DELETE` by schema triggers. The journal API also recomputes the SHA-256 digest
+from a private copy of the authenticated bytes before writing. These controls
+do not replace filesystem access control, encrypted backups, or host security.
+
 ## Key custody
 
 No production private key or provider secret is committed, bundled, printed, or

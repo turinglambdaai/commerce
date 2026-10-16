@@ -90,6 +90,48 @@ order lookup required by the provider contract.
 
 Product clients must not call this function.
 
+@section{Durable event journal}
+
+Server processes explicitly require @filepath{commerce/journal.rkt}. The
+filesystem backend is selected separately with
+@filepath{commerce/journal/sqlite.rkt}; neither module is re-exported from the
+default product-safe facade.
+
+@verbatim{
+(open-sqlite-event-journal database-path) -> event-journal?
+  database-path : path-string?
+}
+
+Opens or creates a Commerce-owned SQLite database. Schema v1 uses WAL mode,
+full commit synchronization, and database triggers that reject updates or
+deletes of accepted event rows.
+
+@verbatim{
+(journal-accept! journal raw-payload event #:received-at received-at)
+  -> journal-acceptance?
+  journal     : event-journal?
+  raw-payload : bytes?
+  event       : payment-event?
+  received-at : exact-nonnegative-integer?
+}
+
+Copies and hashes the exact authenticated bytes, then durably stores them with
+the canonical payment-event snapshot. The acceptance disposition is
+@tt{'accepted} for a newly committed row or @tt{'replayed} for an exact retry.
+The same provider event id with changed raw or canonical content raises an
+@tt{exn:fail:commerce} whose code is @tt{'event-conflict}. Digest mismatch is
+rejected before persistence.
+
+@verbatim{
+(journal-ref journal provider event-id)
+  -> (or/c journal-record? #f)
+
+(journal-close journal) -> void?
+}
+
+@tt{journal-ref} returns the original sequence, canonical event, immutable raw
+payload, and receive time. Call @tt{journal-close} during service shutdown.
+
 @section{First purchase}
 
 @verbatim{

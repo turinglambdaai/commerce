@@ -28,6 +28,13 @@ raco pkg install --auto --no-docs --name commerce .
 (require commerce/provider)
 ```
 
+需要持久接收已认证事件的服务再显式引入：
+
+```racket
+(require commerce/journal
+         commerce/journal/sqlite)
+```
+
 ## 3. 跑通第一笔购买
 
 ```bash
@@ -41,7 +48,7 @@ racket examples/first-purchase.rkt
 ## 4. 修改行为前先读测试
 
 ```bash
-raco test commerce-test/core-test.rkt
+raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt
 ```
 
 测试直接回答首批最难的问题：
@@ -51,6 +58,8 @@ raco test commerce-test/core-test.rkt
 - 退款通知比支付成功更早到达怎么办？
 - 两条成功通知为什么不会签发两次？
 - 同一个订单的金额或 Offer 被改动时怎么办？
+- 什么证据能证明确认结果可以跨服务重启保留？
+- 实际写出的数据库行是什么，普通 SQL 能否篡改它？
 
 ## 5. 理解边界
 
@@ -68,7 +77,8 @@ raco test commerce-test/core-test.rkt
 ## 6. 跑完整门禁
 
 ```bash
-raco make commerce/main.rkt commerce/provider.rkt \
+raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
+  commerce/journal/sqlite.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

@@ -2,7 +2,7 @@
 
 **所有产品，共用一份商业真相——支付事件进入，签名产品权益输出。**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-architecture%20foundation-C15F3C)
+[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M1%20journal-C15F3C)
 
 [English](README.md) · **中文**
 
@@ -18,8 +18,8 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 
 ## 快速开始
 
-首个版本是可运行的架构地基，已经包含纯事件核心、重放冲突防护、订单投影、
-权益意图、渠道边界、测试和一条完整的购买演示。
+当前版本已经包含纯事件核心、重放冲突防护、订单投影、权益意图、渠道边界、
+持久 SQLite 原始事件 journal、测试和一条完整的购买演示。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -111,10 +111,12 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 ```racket
 (require commerce)           ; 纯领域模型与状态转换
 (require commerce/provider)  ; 服务端渠道 adapter 边界
+(require commerce/journal)   ; 持久事件接收契约
+(require commerce/journal/sqlite) ; SQLite journal 后端
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
-或 Permit 签名能力。这些能力必须从后续明确的服务端模块显式引入。
+或 Permit 签名能力。这些能力必须从明确的服务端模块显式引入。
 
 ## 当前状态
 
@@ -126,24 +128,27 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 能正确处理“退款先于支付通知到达”的订单投影；
 - 确定性的 `grant` / `withdraw` 权益意图；
 - 渠道 adapter 契约与 mock 购买演示；
+- 持久 SQLite 原始事件 journal，包含摘要复核、精确重放、冲突拒绝和数据库级
+  不可变保护；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
 - Pancake 或 ZPAY 网络 adapter；
-- SQL 持久化与 Webhook HTTP 端点；
+- 订单投影/outbox 持久化与 Webhook HTTP 端点；
 - Permit issuer 集成和 credential 交付；
 - 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的 Pancake 一次性购买链路。
-缺口保持公开，避免把架构完成误当成生产就绪。
+下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的 Pancake 签名验证和固定测试
+样本。缺口保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 
 ```bash
 raco pkg install --auto --no-docs --name commerce .
-raco make commerce/main.rkt commerce/provider.rkt \
+raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
+  commerce/journal/sqlite.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

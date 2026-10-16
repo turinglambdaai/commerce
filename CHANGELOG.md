@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add a backend-neutral durable journal contract and a SQLite v1 backend that
+  stores exact authenticated bytes plus canonical event snapshots, verifies
+  payload digests, distinguishes accepted/exact/conflicting replay, and blocks
+  row mutation or deletion at the database layer.
 - Align Commerce with the canonical five-repository architecture, including
   the one-way Permit issuer adapter, product/identity boundary, and a bounded
   M1 implementation handoff.
