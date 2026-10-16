@@ -71,6 +71,8 @@ headless service core may not depend on a UI framework.
   only public constructor for verified canonical payment events.
 - `(require commerce/journal)` defines durable acceptance semantics;
   `(require commerce/journal/sqlite)` selects the first filesystem backend.
+- `(require commerce/pancake)` authenticates exact Pancake webhook bytes and
+  returns provider-native evidence; it does not construct canonical events.
 - Network listeners, persistence, provider SDKs, and Permit issuer adapters use
   explicit modules and are never re-exported from `commerce`.
 - Implementation-only helpers belong under `commerce/private/`.
@@ -91,7 +93,7 @@ headless service core may not depend on a UI framework.
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt \
+  commerce/journal/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

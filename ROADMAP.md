@@ -4,11 +4,11 @@ Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
 The next implementation handoff is the first unchecked M1 slice. Take only
-Pancake signature verification with captured valid and invalid fixtures. Do not
-add active order lookup, projection persistence, outbox, Permit signing, or
-claim delivery in the same change. Record the exact signed representation,
-timestamp/replay rules, environment separation, and redaction requirements
-before implementing the adapter.
+active Pancake order verification after an authenticated webhook. Do not add
+projection persistence, outbox, Permit signing, or claim delivery in the same
+change. Record the authoritative order fields, timeout/retry behavior,
+test/production endpoints, amount/currency comparison, and typed failure modes
+before adding network I/O.
 
 ## M0 — Architecture foundation
 
@@ -24,7 +24,7 @@ before implementing the adapter.
 ## M1 — Pancake one-time purchase
 
 - [x] Immutable raw webhook journal
-- [ ] Pancake signature verification with captured test fixtures
+- [x] Pancake signature verification with captured protocol fixtures
 - [ ] Active order verification before fulfillment
 - [ ] Durable order projection and transactional issuance outbox
 - [ ] Offer-to-Permit policy mapping

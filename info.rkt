@@ -1,7 +1,7 @@
 #lang info
 
 (define collection 'multi)
-(define deps '("base" "db-lib"))
+(define deps '("base" "base64-lib" "crypto-lib" "db-lib"))
 (define build-deps '("rackunit-lib" "racket-doc" "scribble-lib"))
 (define pkg-desc
   "Provider-neutral commerce orchestration for independent software")

@@ -36,6 +36,19 @@ Services that durably accept authenticated events explicitly add:
          commerce/journal/sqlite)
 ```
 
+The Pancake edge authenticates exact request bytes in an explicit environment:
+
+```racket
+(require commerce/pancake)
+
+(define verified
+  (verify-pancake-webhook raw-body signature-header
+                          #:environment 'test))
+```
+
+`verified` is provider-native evidence, not a canonical payment event. Active
+order verification is still required before fulfillment.
+
 ## 3. Run the first purchase
 
 ```bash
@@ -50,7 +63,8 @@ emitting a second intent.
 ## 4. Read the test before changing behavior
 
 ```bash
-raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt
+raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
+  commerce-test/pancake-test.rkt
 ```
 
 The tests show the intended answers to the first difficult questions:
@@ -62,6 +76,8 @@ The tests show the intended answers to the first difficult questions:
 - What happens when amount or offer identity changes for the same order?
 - What proves acknowledgement survives a service restart?
 - What database row is emitted, and can ordinary SQL mutate it?
+- What exact Pancake bytes are signed, and how do stale, cross-environment, or
+  ambiguous signed requests fail?
 
 ## 5. Understand the boundary
 
@@ -81,13 +97,13 @@ mode, and fixture evidence in the provider contract first.
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt \
+  commerce/journal/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-The first production provider is Pancake. Its implementation begins only after
-M1 acceptance criteria in [ROADMAP.md](../ROADMAP.md) can be exercised end to
-end in the provider sandbox.
+The first production provider is Pancake. Signature conformance is implemented;
+active order lookup, durable processing, and live sandbox evidence remain
+separate M1 gates in [ROADMAP.md](../ROADMAP.md).
 

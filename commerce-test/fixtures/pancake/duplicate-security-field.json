@@ -1,0 +1,1 @@
+{"id":"evt_fixture_duplicate_a","id":"evt_fixture_duplicate_b","timestamp":"2026-10-16T00:00:00.000Z","eventType":"order.completed","eventId":"PAY_fixture_duplicate","storeId":"STO_fixture_001","storeName":"Fixture Store","data":{"orderId":"ORD_fixture_duplicate"},"mode":"test"}

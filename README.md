@@ -2,7 +2,7 @@
 
 **One commercial truth for every product — payment events in, signed product rights out.**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M1%20journal-C15F3C)
+[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M1%20Pancake-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -22,7 +22,8 @@ rights. Commerce owns the durable orchestration between them.
 
 The current release provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
-event journal, tests, and one runnable purchase walkthrough.
+event journal, exact-byte Pancake webhook authentication, tests, and one
+runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -124,6 +125,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/provider)  ; server-side provider adapter boundary
 (require commerce/journal)   ; durable event-acceptance contract
 (require commerce/journal/sqlite) ; SQLite journal backend
+(require commerce/pancake)   ; Pancake webhook authentication
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -142,26 +144,28 @@ Implemented now:
 - a provider adapter contract and mock walkthrough;
 - a durable SQLite raw-event journal with digest verification, exact replay,
   conflicting-replay rejection, and database-enforced immutable rows;
+- exact-byte Pancake RSA-SHA256 verification with explicit environment keys,
+  bounded replay tolerance, mode binding, and redacted typed failures;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
-- Pancake or ZPAY network adapters;
+- Pancake HTTP/order-query integration or a ZPAY adapter;
 - durable order projections/outbox and webhook HTTP endpoints;
 - Permit issuer integration and credential delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is Pancake signature verification with captured fixtures,
-as described in [ROADMAP.md](ROADMAP.md). Honest gaps are kept visible so
-architecture does not get mistaken for production readiness.
+The next bounded slice is active Pancake order verification after webhook
+authentication, as described in [ROADMAP.md](ROADMAP.md). Honest gaps remain
+visible so architecture does not get mistaken for production readiness.
 
 ## Development
 
 ```bash
 raco pkg install --auto --no-docs --name commerce .
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt \
+  commerce/journal/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

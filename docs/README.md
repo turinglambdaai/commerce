@@ -36,6 +36,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0001: Immutable event journal and transactional outbox](decisions/0001-event-journal-and-outbox.md)
 - [ADR-0002: Pure default facade and explicit server capabilities](decisions/0002-public-api-tiers.md)
 - [ADR-0003: SQLite event journal v1](decisions/0003-sqlite-event-journal-v1.md)
+- [ADR-0004: Pancake webhook authentication boundary](decisions/0004-pancake-webhook-authentication.md)
 
 ## Source entry points
 
@@ -46,6 +47,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/provider.rkt` | explicit server-side provider boundary |
 | `commerce/journal.rkt` | durable event-acceptance protocol |
 | `commerce/journal/sqlite.rkt` | SQLite raw-event journal backend |
+| `commerce/pancake.rkt` | exact-byte Pancake webhook authentication |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |
 | `examples/` | copyable newcomer paths |

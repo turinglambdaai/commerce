@@ -80,8 +80,19 @@ query API must support periodic reconciliation:
 
 Pancake is the first production adapter because it supports individual
 developers, hosted checkout, one-time products, subscriptions, refunds, and a
-Merchant-of-Record workflow. Its exact contract will be based on captured
-sandbox fixtures and current official documentation.
+Merchant-of-Record workflow. `commerce/pancake` now authenticates its webhook
+envelope. The `X-Waffo-Signature` value contains one millisecond timestamp `t`
+and one base64 signature `v1`; RSA-SHA256/PKCS#1 v1.5 signs the ASCII timestamp,
+one period byte, and the exact request body. Verification requires an explicit
+test/production environment, uses separate public keys, accepts at most 45
+minutes of retry age and one minute of future skew, rejects duplicate top-level
+JSON fields, and verifies payload `mode` after cryptographic authentication.
+
+The returned `pancake-webhook` remains provider-native evidence. It may become
+a canonical payment event only after the next slice actively fetches the order
+and validates authoritative state, amount, currency, offer mapping, and stable
+subject binding. Committed fixtures prove protocol conformance with disposable
+keys; live sandbox evidence remains a later M1 gate.
 
 ZPAY is planned as a separate one-time-payment capability. Its documented
 duplicate callbacks, MD5 signing, exact amount checks, and recommended active

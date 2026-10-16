@@ -35,6 +35,18 @@ raco pkg install --auto --no-docs --name commerce .
          commerce/journal/sqlite)
 ```
 
+Pancake 边缘模块在显式环境中认证原始请求字节：
+
+```racket
+(require commerce/pancake)
+
+(define verified
+  (verify-pancake-webhook raw-body signature-header
+                          #:environment 'test))
+```
+
+`verified` 仍是渠道原生证据，不是规范支付事件；履约前仍须主动查单。
+
 ## 3. 跑通第一笔购买
 
 ```bash
@@ -48,7 +60,8 @@ racket examples/first-purchase.rkt
 ## 4. 修改行为前先读测试
 
 ```bash
-raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt
+raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
+  commerce-test/pancake-test.rkt
 ```
 
 测试直接回答首批最难的问题：
@@ -60,6 +73,7 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt
 - 同一个订单的金额或 Offer 被改动时怎么办？
 - 什么证据能证明确认结果可以跨服务重启保留？
 - 实际写出的数据库行是什么，普通 SQL 能否篡改它？
+- Pancake 到底签了哪些原始字节，过期、跨环境或有歧义的已签请求如何关闭失败？
 
 ## 5. 理解边界
 
@@ -78,12 +92,12 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt \
+  commerce/journal/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-首个真实渠道是 Pancake。只有 [ROADMAP.md](../ROADMAP.md) 中 M1 的验收条件能在
-渠道 sandbox 端到端执行后，才宣称该 adapter 完成。
+首个真实渠道是 Pancake。签名协议一致性已经实现；主动查单、持久处理与真实
+sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
 

@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add `commerce/pancake`, an explicit exact-byte RSA-SHA256 webhook verifier
+  with test/production key isolation, asymmetric replay windows, mode binding,
+  duplicate-field rejection, redacted typed failures, and independently
+  checked protocol fixtures.
 - Add a backend-neutral durable journal contract and a SQLite v1 backend that
   stores exact authenticated bytes plus canonical event snapshots, verifies
   payload digests, distinguishes accepted/exact/conflicting replay, and blocks

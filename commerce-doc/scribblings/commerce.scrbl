@@ -90,6 +90,50 @@ order lookup required by the provider contract.
 
 Product clients must not call this function.
 
+@section{Pancake webhook authentication}
+
+Server processes explicitly require @filepath{commerce/pancake.rkt}. This
+module authenticates provider-native evidence and is not re-exported by the
+default facade.
+
+@verbatim{
+(verify-pancake-webhook
+ raw-body signature-header
+ #:environment environment
+ [#:keyring keyring]
+ [#:now-ms now-ms]
+ [#:past-tolerance-ms past-tolerance-ms]
+ [#:future-tolerance-ms future-tolerance-ms])
+ -> pancake-webhook?
+  raw-body        : bytes?
+  signature-header : string?
+  environment     : (or/c 'test 'production)
+}
+
+Verifies the @tt{X-Waffo-Signature} RSA-SHA256 signature over the decimal
+millisecond timestamp, one period byte, and the exact copied request bytes.
+The default window accepts up to 45 minutes of retry age and one minute of
+future clock skew. JSON parsing happens only after verification. The signed
+payload's mode must match the explicitly selected environment, and duplicate
+top-level fields are rejected.
+
+The returned value exposes environment, envelope identifiers, event and store
+metadata, data, immutable raw bytes, their SHA-256 digest, and the signature
+timestamp through the @tt{pancake-webhook-*} accessors. It is not a canonical
+@tt{payment-event}; active order verification remains required.
+
+@verbatim{
+(pancake-webhook-keyring test-public-key production-public-key)
+ -> pancake-webhook-keyring?
+}
+
+An explicit keyring supports controlled provider key rotation. Test and
+production keys must be non-empty and distinct. Authentication and payload
+failures raise redacted @tt{exn:fail:commerce} values; raw bodies, signatures,
+and key contents are never included. Codes distinguish missing or malformed
+signature headers, invalid or out-of-window timestamps, invalid signatures,
+invalid configured public keys, invalid payloads, and environment mismatch.
+
 @section{Durable event journal}
 
 Server processes explicitly require @filepath{commerce/journal.rkt}. The

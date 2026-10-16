@@ -28,6 +28,19 @@ defaults are part of the domain model, not deployment polish.
 9. Redact secrets and personal data structurally before logging.
 10. Separate live/test databases, secrets, keys, provider ids, and hostnames.
 
+For Pancake, `commerce/pancake` copies and authenticates the exact raw bytes
+before JSON parsing. Callers must name the environment; the verifier never
+tries production and test keys in sequence. Its 45-minute past window covers
+provider retries while the one-minute future window limits clock-skew
+acceptance. Duplicate signature fields, duplicate top-level JSON fields, and a
+signed payload whose `mode` disagrees with the selected environment fail
+closed. Durable `(provider, event-id)` journal idempotency remains mandatory.
+
+Pancake authentication failures expose typed codes and minimal metadata only.
+Raw payloads, signature headers, decoded signatures, key contents, underlying
+parser/crypto messages, and customer/order values are forbidden from ordinary
+errors and logs. A SHA-256 payload digest is safe correlation metadata.
+
 SQLite journal rows are protected against application-level `UPDATE` and
 `DELETE` by schema triggers. The journal API also recomputes the SHA-256 digest
 from a private copy of the authenticated bytes before writing. These controls
