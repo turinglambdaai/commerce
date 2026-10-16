@@ -1,0 +1,128 @@
+# Architecture
+
+Commerce is a hosted commercial management plane. Its central rule is:
+
+> Payment providers report money movement; Commerce derives commercial intent;
+> Permit expresses product rights.
+
+No layer substitutes for another.
+
+## System boundary
+
+```text
+Product UI
+   |
+   | create checkout / claim credential
+   v
+Commerce edge
+   |--------------------------------------.
+   |                                      |
+   v                                      v
+Provider adapter                     Claim delivery
+   |                                      |
+   v                                      v
+Pancake / ZPAY / store              signed credential
+   |
+   | authenticated webhook or verified receipt
+   v
+Immutable event journal
+   |
+   v
+Projection transaction
+   |--------------------.
+   v                    v
+Order/subscription   Issuance outbox
+projection               |
+                         v
+                   Entitlement policy
+                         |
+                         v
+                    Permit issuer
+```
+
+## Ownership
+
+| Owner | Responsibilities |
+| --- | --- |
+| Product | User-facing upgrade flow, offer selection, credential storage/import, local Permit policy evaluation |
+| Commerce | Offer mapping, checkout orchestration, authenticated event journal, minimal projections, rights intents, issuance workflow, credential claim delivery, audit |
+| Provider | Payment methods, money movement, provider ledger, billing UI, transaction tax/MoR duties where contracted, refunds and disputes |
+| Permit | Credential protocol, trust verification, entitlement/trial/activation semantics, local policy evaluation, issuer primitives |
+| Rivet/Glaze | Application lifecycle, UI host, secure storage primitives, distribution, update integrity |
+| Keel | Transport-neutral application value/schema/lifecycle vocabulary used by desktop runtimes |
+
+## Source of truth
+
+There is no single database that truthfully owns every concern:
+
+- the provider ledger is authoritative for payment facts;
+- the immutable Commerce journal is authoritative for what Commerce received
+  and authenticated;
+- Commerce projections are rebuildable operational views;
+- the entitlement lineage is authoritative for what Commerce issued;
+- a verified Permit credential is the application's authorization evidence.
+
+The system reconciles these sources; it does not blur them.
+
+## Consistency model
+
+Checkout completion is asynchronous. A browser redirect is user experience,
+not fulfillment evidence. Only an authenticated provider event plus any
+provider-required active order verification may advance commercial state.
+
+Webhook acknowledgement means the raw event was durably accepted or an exact
+retry was recognized. It does not wait for credential signing or email/claim
+delivery. Projection and outbox insertion occur in one database transaction.
+Issuance workers consume the outbox idempotently.
+
+## Process and module boundaries
+
+The repository starts as one deployable service with strict internal tiers:
+
+```text
+commerce                 pure public facade
+commerce/core            deterministic model and transitions
+commerce/provider        explicit server-side adapter contract
+commerce/private/*       implementation-only helpers
+
+future explicit modules:
+commerce/server          HTTP edge and lifecycle
+commerce/storage         journal/projection/outbox transaction
+commerce/pancake         Pancake protocol adapter
+commerce/zpay            ZPAY protocol adapter
+commerce/permit          Permit issuer and claim delivery
+commerce/operator        inspect/replay/reissue CLI
+```
+
+Physical extraction into separately versioned packages happens only when real
+consumers require independent release cadence. Directory symmetry alone is not
+a reason to split packages.
+
+## Provider capability model
+
+Adapters expose capabilities rather than pretending every provider is equal.
+One-time checkout, recurring billing, partial refund, customer portal, local
+payment methods, and active order lookup remain independent capabilities.
+
+The core vocabulary grows only when at least two providers or one provider plus
+an app-store receipt flow demonstrate the same durable semantic. Provider-only
+data remains provider-owned.
+
+## Failure behavior
+
+- Invalid authentication: reject without creating a canonical event.
+- Exact retry: acknowledge without a second projection or rights intent.
+- Same event id, different content: quarantine and alert; never guess.
+- Same order, changed offer/subject/amount: quarantine and alert.
+- Unknown offer mapping: retain authenticated event, block projection, expose
+  operator action.
+- Issuer unavailable: retain outbox work and retry; payment state is not lost.
+- Delivery unavailable: retain signed credential and retry claim notification.
+
+## Evolution rule
+
+The first production slice is one Pancake one-time purchase. Subscriptions and
+ZPAY arrive later through the same journal/outbox boundary. Architecture is
+allowed to become more capable, but never by moving provider secrets or Permit
+private keys into products.
+

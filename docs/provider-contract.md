@@ -1,0 +1,75 @@
+# Provider contract
+
+Every provider adapter converts one external protocol into authenticated
+canonical facts. It does not decide product rights.
+
+## Adapter operations
+
+An adapter may implement these capabilities independently:
+
+- create a hosted checkout session for one configured Offer;
+- authenticate and parse a webhook or signed receipt;
+- actively fetch an order/payment by provider id;
+- request a refund;
+- inspect subscription state;
+- map test-mode and live-mode identities without mixing them.
+
+The initial Racket boundary is `provider-adapter` in `commerce/provider`:
+
+```racket
+(provider-adapter id create-checkout verify-webhook fetch-order)
+```
+
+Procedure signatures will graduate only with the first real adapter. Until
+then, this struct records ownership and prevents network/provider code from
+leaking into the pure core.
+
+## Required webhook proof
+
+Before calling `make-verified-payment-event`, an adapter must:
+
+1. authenticate the exact raw request using the provider's documented scheme;
+2. enforce body, header, and timestamp limits;
+3. reject test/live environment confusion;
+4. parse without discarding duplicate or security-critical fields;
+5. map the provider product/price to a configured Offer;
+6. resolve a stable internal subject id without using display email as identity;
+7. represent money in exact minor units;
+8. perform active order lookup when the provider contract or threat model
+   requires it;
+9. compute a SHA-256 digest of the authenticated raw representation;
+10. emit one canonical event or a typed, operator-visible rejection.
+
+## Delivery behavior
+
+Providers may retry, duplicate, delay, or reorder notifications. Adapters must
+not assume at-most-once or ordered delivery. The journal key is
+`(provider, event-id)`; the projection key is `(provider, order-id)`.
+
+Return the provider's required success acknowledgement only after durable
+journal acceptance. Slow signing, email, or product delivery happens after the
+request through the outbox.
+
+## Reconciliation
+
+Webhook delivery is not the only evidence path. Every production adapter with a
+query API must support periodic reconciliation:
+
+- fetch changed/succeeded/refunded orders for a bounded period;
+- compare them with local journal/projections;
+- ingest missing facts through the same canonical path;
+- report mismatches without silently editing history.
+
+## Provider-specific notes
+
+Pancake is the first production adapter because it supports individual
+developers, hosted checkout, one-time products, subscriptions, refunds, and a
+Merchant-of-Record workflow. Its exact contract will be based on captured
+sandbox fixtures and current official documentation.
+
+ZPAY is planned as a separate one-time-payment capability. Its documented
+duplicate callbacks, MD5 signing, exact amount checks, and recommended active
+order query make the journal/reconciliation boundary mandatory. Commerce will
+not model ZPAY as a recurring provider unless the live provider contract gains
+that capability.
+

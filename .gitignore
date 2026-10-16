@@ -1,0 +1,15 @@
+/compiled/
+**/compiled/
+/.commerce/
+/.env
+/.env.*
+!/\.env.example
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Production material never belongs in this repository.
+/keys/
+/secrets/
+/var/
+

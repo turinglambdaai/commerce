@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        racket-version: ["9.0", "9.3"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.14
+        with:
+          version: ${{ matrix.racket-version }}
+      - name: Install package
+        run: raco pkg install --auto --no-docs --name commerce "${{ github.workspace }}"
+      - name: Compile
+        run: raco make commerce/main.rkt commerce/provider.rkt commerce-doc/scribblings/commerce.scrbl
+      - name: Test
+        run: raco test -p commerce
+
+  quality:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.14
+        with:
+          version: "9.3"
+      - name: Install package with documentation
+        run: raco pkg install --auto --name commerce "${{ github.workspace }}"
+      - name: Check declared package dependencies
+        run: raco setup --check-pkg-deps commerce
+      - name: Build reference manual
+        run: raco scribble --htmls --dest "${{ runner.temp }}/commerce-doc" commerce-doc/scribblings/commerce.scrbl
+      - name: Run newcomer walkthrough
+        run: racket examples/first-purchase.rkt
+      - name: Require a clean generated tree
+        run: git diff --exit-code
+
