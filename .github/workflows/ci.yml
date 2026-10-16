@@ -22,8 +22,8 @@ jobs:
         racket-version: ["9.0", "9.3"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: Bogdanp/setup-racket@v1.14
+      - uses: actions/checkout@v7
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: ${{ matrix.racket-version }}
       - name: Install package
@@ -37,8 +37,8 @@ jobs:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: Bogdanp/setup-racket@v1.14
+      - uses: actions/checkout@v7
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: "9.3"
       - name: Install package with documentation
