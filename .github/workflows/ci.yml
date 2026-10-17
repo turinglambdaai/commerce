@@ -26,6 +26,9 @@ jobs:
       - uses: Bogdanp/setup-racket@v1.15
         with:
           version: ${{ matrix.racket-version }}
+      # Development follows Permit main; the public catalog may lag new snapshot APIs.
+      - name: Install latest Permit package
+        run: raco pkg install --auto --no-docs --name permit https://github.com/turinglambdaai/permit.git
       - name: Install package
         run: raco pkg install --auto --no-docs --name commerce "${{ github.workspace }}"
       - name: Compile
@@ -41,6 +44,9 @@ jobs:
       - uses: Bogdanp/setup-racket@v1.15
         with:
           version: "9.3"
+      # Development follows Permit main; the public catalog may lag new snapshot APIs.
+      - name: Install latest Permit package
+        run: raco pkg install --auto --no-docs --name permit https://github.com/turinglambdaai/permit.git
       - name: Install package with documentation
         run: raco pkg install --auto --name commerce "${{ github.workspace }}"
       - name: Check declared package dependencies
