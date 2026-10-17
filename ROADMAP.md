@@ -4,13 +4,14 @@ Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
 The next implementation handoff is a bounded part of the first unchecked M1
-slice. Add durable entitlement-lineage records and the issuance-outbox lease
-state machine. Claim work in a short transaction, bind it to the pinned policy
-id/version and lineage ids, and make expiry/reclaim owner-safe. Do not load a
-private key, call the Permit signer, persist credential bytes, deliver claims,
-add an HTTP listener, or introduce subscription policy in the same change.
-Record the schema migration, crash points, retry taxonomy, and emitted rows
-before adding worker mutations.
+slice. Add the issuance-outbox lease state machine and transactional writer for
+the schema-v3 entitlement lineage tables. Claim work in a short transaction,
+bind it to the pinned policy id/version and lineage ids, and make
+expiry/reclaim owner-safe. Do not load a private key, call the Permit signer,
+persist signed credential bytes, deliver claims, add an HTTP listener, or
+introduce subscription policy in the same change. Schema migration, crash
+points, retry taxonomy, and exact unsigned payload rows are already recorded in
+ADR-0008.
 
 ## M0 — Architecture foundation
 

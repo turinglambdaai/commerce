@@ -197,10 +197,13 @@ product-safe facade.
   database-path : path-string?
 }
 
-Opens or creates a Commerce-owned SQLite database. Schema v2 uses WAL mode,
+Opens or creates a Commerce-owned SQLite database. Schema v3 uses WAL mode,
 full commit synchronization, foreign keys, and database triggers that reject
-updates or deletes of accepted event rows. A schema-v1 journal migrates in
-place without changing its existing rows.
+updates or deletes of accepted event and entitlement-lineage evidence. Schema
+v1 and v2 databases migrate in place without rewriting existing rows. The v3
+lineage tables retain stable entitlement roots and contiguous revisions with
+exact unsigned Permit payload bytes; no public lineage writer, lease mutation,
+signer, or signed-credential storage is exposed yet.
 
 @verbatim{
 (journal-accept! storage raw-payload event #:received-at received-at)

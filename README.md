@@ -148,9 +148,9 @@ Implemented now:
 - a provider adapter contract and mock walkthrough;
 - a durable SQLite raw-event journal with digest verification, exact replay,
   conflicting-replay rejection, and database-enforced immutable rows;
-- SQLite schema v2 with in-place v1 migration, deterministic journal
-  projection, durable blocked-event outcomes, and atomic order plus issuance
-  outbox writes;
+- SQLite schema v3 with in-place v1/v2 migration, deterministic journal
+  projection, atomic order plus issuance-outbox writes, and append-only,
+  contiguous entitlement-lineage evidence;
 - exact-byte Pancake RSA-SHA256 verification with explicit environment keys,
   bounded replay tolerance, mode binding, and redacted typed failures;
 - signed Pancake merchant GraphQL reads that bind a completed one-time order to
@@ -166,13 +166,15 @@ Not implemented yet:
 
 - webhook HTTP endpoints;
 - ZPAY or app-store adapters;
-- durable entitlement lineage, Permit signing, and credential delivery;
+- the lineage writer and outbox lease worker, Permit signing, and credential
+  delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is durable entitlement lineage plus an owner-safe outbox
-lease state machine, as described in [ROADMAP.md](ROADMAP.md). Honest gaps
-remain visible so architecture does not get mistaken for production readiness.
+The next bounded slice is the transactional lineage writer plus an owner-safe
+outbox lease state machine, as described in [ROADMAP.md](ROADMAP.md). Honest
+gaps remain visible so architecture does not get mistaken for production
+readiness.
 
 ## Development
 

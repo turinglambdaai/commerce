@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add SQLite schema v3 with immutable entitlement roots and contiguous Permit
+  revision evidence. Fresh, v1, and v2 databases migrate atomically without
+  rewriting journal/outbox evidence; no lease worker, signer, signed credential,
+  or delivery behavior is implied.
 - Add validated, version-pinned Offer-to-Permit policy mapping for one-time
   grants and issuance-expiring withdrawal successors. Active and retained
   retired Offers resolve deterministically; unknown, deleted, mismatched, and

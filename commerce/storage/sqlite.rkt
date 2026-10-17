@@ -9,7 +9,7 @@
          "../private/projection.rkt"
          "../private/storage-model.rkt")
 
-(define schema-version 2)
+(define schema-version 3)
 (define application-id 1129270605) ; ASCII "COMM"
 (define sqlite-max-integer 9223372036854775807)
 
@@ -270,6 +270,86 @@ ON commerce_issuance_outbox(status, available_at, id)
 SQL
    ))
 
+(define (create-lineage-schema! connection)
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_entitlement_lineage (
+  entitlement_id TEXT PRIMARY KEY
+    CHECK (length(entitlement_id) BETWEEN 1 AND 256),
+  issuer TEXT NOT NULL CHECK (length(issuer) BETWEEN 1 AND 256),
+  subject_type TEXT NOT NULL CHECK (length(subject_type) BETWEEN 1 AND 256),
+  subject_id TEXT NOT NULL CHECK (length(subject_id) BETWEEN 1 AND 256),
+  credential_type TEXT NOT NULL CHECK (credential_type = 'entitlement'),
+  offer_id TEXT NOT NULL CHECK (length(offer_id) BETWEEN 1 AND 256),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0),
+  UNIQUE (issuer, subject_type, subject_id, credential_type, offer_id)
+)
+SQL
+   )
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_entitlement_revision (
+  entitlement_id TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision >= 0),
+  previous_revision INTEGER CHECK (previous_revision >= 0),
+  credential_id TEXT NOT NULL UNIQUE
+    CHECK (length(credential_id) BETWEEN 1 AND 256),
+  issuance_outbox_id INTEGER NOT NULL UNIQUE,
+  action TEXT NOT NULL CHECK (action IN ('grant', 'withdraw')),
+  policy_id TEXT NOT NULL CHECK (length(policy_id) BETWEEN 1 AND 256),
+  policy_version INTEGER NOT NULL CHECK (policy_version > 0),
+  payload_bytes BLOB NOT NULL CHECK (length(payload_bytes) > 0),
+  payload_digest TEXT NOT NULL CHECK (length(payload_digest) = 64),
+  issued_at TEXT NOT NULL CHECK (length(issued_at) > 0),
+  recorded_at INTEGER NOT NULL CHECK (recorded_at >= 0),
+  PRIMARY KEY (entitlement_id, revision),
+  FOREIGN KEY (entitlement_id)
+    REFERENCES commerce_entitlement_lineage(entitlement_id),
+  FOREIGN KEY (issuance_outbox_id)
+    REFERENCES commerce_issuance_outbox(id),
+  FOREIGN KEY (entitlement_id, previous_revision)
+    REFERENCES commerce_entitlement_revision(entitlement_id, revision),
+  CHECK ((revision = 0 AND previous_revision IS NULL AND action = 'grant') OR
+         (revision > 0 AND previous_revision = revision - 1))
+)
+SQL
+   )
+  (for ([statement
+         (in-list
+          (list
+           #<<SQL
+CREATE TRIGGER commerce_entitlement_lineage_no_update
+BEFORE UPDATE ON commerce_entitlement_lineage
+BEGIN
+  SELECT RAISE(ABORT, 'commerce entitlement lineage rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_entitlement_lineage_no_delete
+BEFORE DELETE ON commerce_entitlement_lineage
+BEGIN
+  SELECT RAISE(ABORT, 'commerce entitlement lineage rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_entitlement_revision_no_update
+BEFORE UPDATE ON commerce_entitlement_revision
+BEGIN
+  SELECT RAISE(ABORT, 'commerce entitlement revision rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_entitlement_revision_no_delete
+BEFORE DELETE ON commerce_entitlement_revision
+BEGIN
+  SELECT RAISE(ABORT, 'commerce entitlement revision rows are immutable');
+END
+SQL
+           ))])
+    (query-exec connection statement)))
+
 (define (initialize-schema! connection)
   (define stored-application-id
     (query-value connection "PRAGMA application_id"))
@@ -282,6 +362,7 @@ SQL
       (lambda ()
         (create-journal-schema! connection)
         (create-projection-schema! connection)
+        (create-lineage-schema! connection)
         (query-exec connection
                     (format "PRAGMA application_id = ~a" application-id))
         (query-exec connection
@@ -297,6 +378,15 @@ SQL
       connection
       (lambda ()
         (create-projection-schema! connection)
+        (create-lineage-schema! connection)
+        (query-exec connection
+                    (format "PRAGMA user_version = ~a" schema-version)))
+      #:option 'immediate)]
+    [(= stored-version 2)
+     (call-with-transaction
+      connection
+      (lambda ()
+        (create-lineage-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]

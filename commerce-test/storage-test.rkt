@@ -49,6 +49,125 @@
     (query-value connection (format "SELECT COUNT(*) FROM ~a" table))
     (disconnect connection)))
 
+(test-case "schema v3 records immutable contiguous entitlement revisions"
+  (call-with-temporary-database
+   (lambda (path)
+     (define payload #"authenticated payment")
+     (define storage (open-sqlite-commerce-storage path))
+     (journal-accept! storage payload (event payload) #:received-at 10)
+     (storage-project-next! storage #:processed-at 11)
+     (define refund-payload #"authenticated refund")
+     (journal-accept!
+      storage refund-payload
+      (event refund-payload #:event-id "evt_refund"
+             #:kind 'payment-refunded #:occurred-at 12)
+      #:received-at 13)
+     (storage-project-next! storage #:processed-at 14)
+     (storage-close storage)
+
+     (define connection
+       (sqlite3-connect #:database path #:mode 'read/write))
+     (query-exec connection "PRAGMA foreign_keys = ON")
+     (check-equal? (query-value connection "PRAGMA user_version") 3)
+     (check-equal?
+      (query-value
+       connection
+       #<<SQL
+SELECT COUNT(*)
+FROM sqlite_master
+WHERE type = 'trigger'
+  AND name IN ('commerce_entitlement_lineage_no_update',
+               'commerce_entitlement_lineage_no_delete',
+               'commerce_entitlement_revision_no_update',
+               'commerce_entitlement_revision_no_delete')
+SQL
+       )
+      4)
+     (query-exec
+      connection
+      #<<SQL
+INSERT INTO commerce_entitlement_lineage
+  (entitlement_id, issuer, subject_type, subject_id, credential_type, offer_id,
+   created_at)
+VALUES (?, ?, ?, ?, 'entitlement', ?, ?)
+SQL
+      "entitlement-001" "commerce.example" "person" "customer-001"
+      "taskly-pro-lifetime" 12)
+     (define initial-payload #"{\"revision\":0}")
+     (query-exec
+      connection
+      #<<SQL
+INSERT INTO commerce_entitlement_revision
+  (entitlement_id, revision, previous_revision, credential_id,
+   issuance_outbox_id, action, policy_id, policy_version, payload_bytes,
+   payload_digest, issued_at, recorded_at)
+VALUES (?, 0, NULL, ?, 1, 'grant', ?, 1, ?, ?, ?, ?)
+SQL
+      "entitlement-001" "credential-001" "taskly-pro-lifetime-v1"
+      initial-payload (payload-digest initial-payload)
+      "2026-10-17T03:00:00Z" 13)
+     (check-equal?
+      (query-row
+       connection
+       #<<SQL
+SELECT l.issuer, l.subject_type, l.subject_id, l.offer_id, r.revision,
+       r.previous_revision, r.credential_id, r.action, r.policy_id,
+       r.policy_version, r.payload_bytes, r.payload_digest, r.issued_at
+FROM commerce_entitlement_lineage AS l
+JOIN commerce_entitlement_revision AS r
+  ON r.entitlement_id = l.entitlement_id
+SQL
+       )
+      (vector "commerce.example" "person" "customer-001"
+              "taskly-pro-lifetime" 0 sql-null "credential-001" "grant"
+              "taskly-pro-lifetime-v1" 1 initial-payload
+              (payload-digest initial-payload) "2026-10-17T03:00:00Z"))
+     (check-exn
+      exn:fail:sql?
+      (lambda ()
+        (query-exec
+         connection
+         #<<SQL
+INSERT INTO commerce_entitlement_revision
+  (entitlement_id, revision, previous_revision, credential_id,
+   issuance_outbox_id, action, policy_id, policy_version, payload_bytes,
+   payload_digest, issued_at, recorded_at)
+VALUES ('entitlement-001', 2, 1, 'credential-gap', 2, 'withdraw',
+        'taskly-pro-lifetime-v1', 1, X'01', ?, '2026-10-17T03:01:00Z', 14)
+SQL
+         (make-string 64 #\a))))
+     (define successor-payload #"{\"revision\":1}")
+     (query-exec
+      connection
+      #<<SQL
+INSERT INTO commerce_entitlement_revision
+  (entitlement_id, revision, previous_revision, credential_id,
+   issuance_outbox_id, action, policy_id, policy_version, payload_bytes,
+   payload_digest, issued_at, recorded_at)
+VALUES (?, 1, 0, ?, 2, 'withdraw', ?, 1, ?, ?, ?, ?)
+SQL
+      "entitlement-001" "credential-002" "taskly-pro-lifetime-v1"
+      successor-payload (payload-digest successor-payload)
+      "2026-10-17T03:01:00Z" 15)
+     (check-equal?
+      (query-value
+       connection
+       "SELECT COUNT(*) FROM commerce_entitlement_revision WHERE entitlement_id = 'entitlement-001'")
+      2)
+     (check-exn
+      exn:fail:sql?
+      (lambda ()
+        (query-exec
+         connection
+         "UPDATE commerce_entitlement_revision SET policy_version = 2 WHERE entitlement_id = 'entitlement-001' AND revision = 0")))
+     (check-exn
+      exn:fail:sql?
+      (lambda ()
+        (query-exec
+         connection
+         "DELETE FROM commerce_entitlement_lineage WHERE entitlement_id = 'entitlement-001'")))
+     (disconnect connection))))
+
 (test-case "projection and issuance outbox commit as one durable transition"
   (call-with-temporary-database
    (lambda (path)
@@ -414,7 +533,7 @@ SQL
      (storage-close storage)
      (define connection
        (sqlite3-connect #:database path #:mode 'read-only))
-     (check-equal? (query-value connection "PRAGMA user_version") 2)
+     (check-equal? (query-value connection "PRAGMA user_version") 3)
      (check-equal?
       (query-value
        connection
@@ -423,4 +542,46 @@ SQL
      (check-equal?
       (query-value connection "SELECT COUNT(*) FROM commerce_issuance_outbox")
       1)
+     (check-equal?
+      (query-value connection "SELECT COUNT(*) FROM commerce_entitlement_lineage")
+      0)
+     (disconnect connection))))
+
+(test-case "schema v2 migrates in place without changing durable work"
+  (call-with-temporary-database
+   (lambda (path)
+     (define payload #"schema v2 durable evidence")
+     (define storage (open-sqlite-commerce-storage path))
+     (journal-accept! storage payload (event payload) #:received-at 10)
+     (storage-project-next! storage #:processed-at 11)
+     (storage-close storage)
+
+     ;; Remove only the v3 tables to reproduce the exact v2 structural subset.
+     (define old
+       (sqlite3-connect #:database path #:mode 'read/write))
+     (query-exec old "DROP TABLE commerce_entitlement_revision")
+     (query-exec old "DROP TABLE commerce_entitlement_lineage")
+     (query-exec old "PRAGMA user_version = 2")
+     (define before
+       (query-row
+        old
+        "SELECT idempotency_key, source_journal_sequence, status, attempts, available_at FROM commerce_issuance_outbox"))
+     (disconnect old)
+
+     (define migrated (open-sqlite-commerce-storage path))
+     (storage-close migrated)
+     (define connection
+       (sqlite3-connect #:database path #:mode 'read-only))
+     (check-equal? (query-value connection "PRAGMA user_version") 3)
+     (check-equal?
+      (query-row
+       connection
+       "SELECT idempotency_key, source_journal_sequence, status, attempts, available_at FROM commerce_issuance_outbox")
+      before)
+     (check-equal?
+      (query-value connection "SELECT COUNT(*) FROM commerce_entitlement_lineage")
+      0)
+     (check-equal?
+      (query-value connection "SELECT COUNT(*) FROM commerce_entitlement_revision")
+      0)
      (disconnect connection))))

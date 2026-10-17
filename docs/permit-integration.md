@@ -85,8 +85,11 @@ Grant rejects a previous lineage. Withdrawal requires one and verifies its
 issuer, entitlement id, subject type/id, entitlement credential type, and grant
 set against the pinned Offer policy before advancing the revision.
 
-This module does not claim outbox work, allocate ids, persist lineage, load a
-key, call `issue-credential`, or deliver a claim.
+SQLite schema v3 reserves append-only lineage roots and contiguous revision
+evidence, including the exact unsigned payload bytes and pinned policy version.
+The storage writer is not implemented yet. This module itself does not claim
+outbox work, allocate ids, persist lineage, load a key, call
+`issue-credential`, or deliver a claim.
 
 ## Trust domains
 

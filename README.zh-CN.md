@@ -135,8 +135,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 渠道 adapter 契约与 mock 购买演示；
 - 持久 SQLite 原始事件 journal，包含摘要复核、精确重放、冲突拒绝和数据库级
   不可变保护；
-- SQLite schema v2，包含 v1 原位迁移、确定性 journal 投影、持久 blocked 结果，
-  以及订单与签发 outbox 的原子写入；
+- SQLite schema v3，包含 v1/v2 原位迁移、确定性 journal 投影、订单与签发
+  outbox 的原子写入，以及只追加且 revision 连续的 entitlement lineage 证据；
 - Pancake RSA-SHA256 原始字节验签，包含显式环境密钥、有限重放窗口、mode 绑定
   和脱敏的类型化错误；
 - 带商户签名的 Pancake GraphQL 查单：在构造规范支付事件前，将已完成的一次性
@@ -150,12 +150,12 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 
 - Webhook HTTP 端点；
 - ZPAY 或应用商店 adapter；
-- 持久 entitlement lineage、Permit 签名和 credential 交付；
+- lineage 写入器与 outbox lease worker、Permit 签名和 credential 交付；
 - 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的持久 entitlement lineage 与
-带 owner 校验的 outbox lease 状态机。缺口保持公开，避免把架构完成误当成生产就绪。
+下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的事务型 lineage 写入器与带
+owner 校验的 outbox lease 状态机。缺口保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 

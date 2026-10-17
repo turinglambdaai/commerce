@@ -33,10 +33,11 @@ history.
 
 ## Journal evidence
 
-The SQLite service store uses application id `COMM` and schema version 2.
-Opening a schema-v1 journal migrates it in place and leaves existing evidence
-pending for projection. Operational inspection should select identifiers and
-status metadata, not `raw_payload`:
+The SQLite service store uses application id `COMM` and schema version 3.
+Opening a schema-v1 journal creates the projection, outbox, and lineage schema;
+opening schema v2 adds only the lineage tables. Both migrations are atomic and
+preserve existing evidence. Operational inspection should select identifiers
+and status metadata, not `raw_payload`:
 
 ```sql
 SELECT sequence, provider, event_id, event_kind, order_id, received_at
@@ -59,6 +60,15 @@ SELECT id, idempotency_key, status, attempts, available_at,
        lease_owner, lease_expires_at, last_error_code
 FROM commerce_issuance_outbox
 ORDER BY id;
+
+SELECT entitlement_id, issuer, subject_type, subject_id, offer_id, created_at
+FROM commerce_entitlement_lineage
+ORDER BY entitlement_id;
+
+SELECT entitlement_id, revision, previous_revision, credential_id,
+       issuance_outbox_id, action, policy_id, policy_version, issued_at
+FROM commerce_entitlement_revision
+ORDER BY entitlement_id, revision;
 ```
 
 A missing projection-event row is safe pending work. `blocked` is terminal for
@@ -85,6 +95,12 @@ transaction, set `processing`, increment `attempts`, and store an opaque owner
 and expiry; active leases are exclusive and expired leases are reclaimable.
 Signing occurs outside that claim transaction, followed by owner-checked
 completion. No worker may infer authorization merely from outbox status.
+
+Lineage and revision tables exist as an append-only schema foundation, but no
+public writer is implemented yet. Revision rows retain exact unsigned Permit
+payload bytes and their digest. Routine inspection omits those bytes, and they
+must not be confused with signed credential bytes, which schema v3 does not
+store.
 
 Pancake active reads make one transport attempt with a five-second connect
 limit and separate ten-second limits for receiving response headers and the
