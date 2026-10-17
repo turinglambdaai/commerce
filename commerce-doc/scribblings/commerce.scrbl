@@ -262,6 +262,95 @@ New rows are @tt{'pending} with zero attempts and no lease. This release does
 not expose lease mutation or Permit signing APIs. Call @tt{storage-close}
 during service shutdown.
 
+@section{Offer-to-Permit policy mapping}
+
+Server processes explicitly require @filepath{commerce/permit.rkt}. This
+module imports the published @tt{permit/issuer} snapshot surface; it is not
+re-exported from the default facade and never accesses a signing key.
+
+@verbatim{
+(make-permit-grant-policy
+ [#:products products]
+ [#:product-families product-families]
+ [#:edition edition]
+ [#:feature-policy feature-policy]
+ [#:features features]
+ [#:addons addons]
+ [#:capabilities capabilities])
+ -> permit-grant-policy?
+}
+
+Constructs one reviewed grant policy. Optional Commerce values use @tt{#f};
+the adapter translates absence to Permit @tt{null}. The smart constructor
+validates the resulting grant through Permit's complete entitlement schema.
+Feature policy is @tt{'explicit} or @tt{'published-through}.
+
+@verbatim{
+(make-permit-constraints-policy
+ [#:use-expires-at use-expires-at]
+ [#:updates-through updates-through]
+ [#:features-through features-through]
+ [#:version-min version-min]
+ [#:version-max version-max]
+ [#:named-seats named-seats]
+ [#:device-activations device-activations]
+ [#:concurrent-seats concurrent-seats]
+ [#:installation-id installation-id]
+ [#:activation-required? activation-required?])
+ -> permit-constraints-policy?
+}
+
+Constructs the complete constraints policy and validates timestamps, SemVer
+bounds, limits, installation binding, and activation shape through Permit.
+
+@verbatim{
+(make-permit-entitlement-policy
+ id version
+ #:subject-type subject-type
+ #:grants grants
+ [#:constraints constraints]
+ [#:withdrawal-mode 'expire-at-issuance])
+ -> permit-entitlement-policy?
+
+(make-permit-policy-catalog
+ offers policies
+ [#:deleted-offer-ids deleted-offer-ids])
+ -> permit-policy-catalog?
+}
+
+Policy ids are immutable revisions; the positive integer version is audit
+metadata and never selects a mutable latest policy. The catalog contains both
+active and retained retired Offer definitions. Explicit deletion tombstones
+are distinct from never-known Offer ids. Every Offer's product must occur in
+the explicit product scope of its pinned policy.
+
+@verbatim{
+(prepare-permit-snapshot
+ catalog intent
+ #:issuer issuer
+ #:credential-id credential-id
+ #:entitlement-id entitlement-id
+ #:issued-at issued-at
+ [#:previous previous])
+ -> permit-snapshot-request?
+}
+
+For @tt{'grant}, creates a complete entitlement at revision 0 and rejects an
+existing lineage. For @tt{'withdraw}, requires the previous complete snapshot,
+checks issuer, entitlement id, subject, type, and grants, advances its revision,
+and sets @tt{use_expires_at} to the new @tt{issued_at}. This communicates an
+issuance-expiring successor to connected clients; it does not revoke an old
+offline credential.
+
+The result exposes policy id/version, action, source idempotency key, the
+validated complete payload, and @tt{permit-snapshot-request-payload-bytes}.
+The payload tree and bytes are immutable copies. Those bytes are Permit's
+single serialization and are the only bytes a later signer may sign.
+Unknown/deleted Offers, invalid policy/catalog/request data,
+unsupported kinds/actions, and missing or conflicting lineage raise typed
+@tt{exn:fail:commerce} values. No outbox mutation, lineage persistence,
+signing, or delivery happens in this operation.
+
 @section{First purchase}
 
 @verbatim{

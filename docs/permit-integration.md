@@ -23,15 +23,28 @@ permit/issuer signs exact payload bytes
 record credential + issuance audit + delivery claim
 ```
 
-An Offer references a stable policy id, not a serialized provider object and
-not arbitrary Permit JSON supplied by the client. Policy configuration is
-versioned and reviewed with code.
+An Offer references an immutable policy id, not a serialized provider object
+and not arbitrary Permit JSON supplied by the client. Policy configuration is
+versioned and reviewed with code. A rights change creates a new policy id and
+audit version; delayed work never resolves a mutable "latest" policy.
+
+`commerce/permit` is the explicit server-side mapping boundary. Its smart
+constructors validate grants, constraints, subject type, and complete snapshots
+through the published `permit/issuer` package. The default `commerce` facade
+does not import Permit.
+
+The policy catalog contains active Offers plus retired definitions still needed
+by retained journal, outbox, or lineage records. Removing an Offer from checkout
+does not remove its definition. A deliberate deletion leaves an id tombstone
+and fails with `offer-deleted`; a never-known id fails with `unknown-offer`.
 
 ## Purchase
 
-A first successful purchase normally creates revision 0 with a stable internal
-subject id and complete grants/constraints. Reprocessing the same rights intent
-returns the recorded issuance result.
+A first successful purchase creates revision 0 with a stable internal subject
+id and complete grants/constraints. The caller supplies deterministic
+credential and entitlement lineage ids. Reprocessing the same rights intent
+must use the recorded issuance result; the mapping itself is pure and byte
+stable for identical inputs.
 
 ## Renewal and plan change
 
@@ -42,7 +55,13 @@ credential.
 ## Refund and chargeback
 
 A `withdraw` intent records commercial evidence; it does not claim impossible
-offline revocation. Each product policy chooses one honest response:
+offline revocation. The initial one-time policy implements one explicit
+response: issue the next complete revision with `use_expires_at` equal to its
+`issued_at`. Its use window ends at issuance, so it is expired afterward; an
+older offline credential remains usable until another product mechanism can
+reach it.
+
+Future products may deliberately choose another honest response:
 
 - accept the risk for a low-value perpetual offline purchase;
 - require a short activation lease during the refund window;
@@ -52,6 +71,22 @@ offline revocation. Each product policy chooses one honest response:
 
 The operator UI and customer communication must describe the actual mechanism,
 not the desired outcome.
+
+## Snapshot request
+
+`prepare-permit-snapshot` accepts a reviewed catalog, a `rights-intent`, issuer,
+credential id, entitlement id, issuance time, and—only for withdrawal—the
+previous complete entitlement snapshot. It returns policy id/version, action,
+source idempotency key, the complete validated Permit payload, and the exact
+serialized bytes. Both are deeply immutable copies. A later signer signs those
+bytes; it never reconstructs JSON.
+
+Grant rejects a previous lineage. Withdrawal requires one and verifies its
+issuer, entitlement id, subject type/id, entitlement credential type, and grant
+set against the pinned Offer policy before advancing the revision.
+
+This module does not claim outbox work, allocate ids, persist lineage, load a
+key, call `issue-credential`, or deliver a claim.
 
 ## Trust domains
 

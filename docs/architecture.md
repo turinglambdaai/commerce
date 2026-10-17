@@ -94,12 +94,12 @@ commerce/journal         durable acceptance protocol
 commerce/storage         durable projection and outbox protocol
 commerce/storage/sqlite  SQLite journal/projection/outbox backend
 commerce/pancake         Pancake webhook authentication boundary
+commerce/permit          Offer policy and Permit snapshot adapter
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
 commerce/server          HTTP edge and lifecycle
 commerce/zpay            ZPAY protocol adapter
-commerce/permit          Permit issuer and claim delivery
 commerce/operator        inspect/replay/reissue CLI
 ```
 
@@ -123,7 +123,8 @@ data remains provider-owned.
 - Exact retry: acknowledge without a second projection or rights intent.
 - Same event id, different content: quarantine and alert; never guess.
 - Same order, changed offer/subject/amount: quarantine and alert.
-- Unknown offer mapping: retain authenticated event, block projection, expose
+- Unknown or deliberately deleted Offer policy: retain journal, projection, and
+  outbox evidence; fail snapshot preparation before signing and expose typed
   operator action.
 - Order identity conflict: preserve the previous projection, create no outbox
   work, and durably mark the journal sequence blocked.

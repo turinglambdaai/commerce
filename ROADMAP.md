@@ -3,13 +3,14 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is the first unchecked M1 slice. Take only the
-Offer-to-Permit policy mapping: define the validated policy input and complete
-rights snapshot requested from Permit for a one-time grant or withdrawal. Do
-not call a signer, mutate outbox workflow state, deliver claims, add an HTTP
-listener, or introduce subscription policy in the same change. Record policy
-versioning, unknown/deleted Offer behavior, entitlement lineage inputs, and
-typed failures before adding the adapter.
+The next implementation handoff is a bounded part of the first unchecked M1
+slice. Add durable entitlement-lineage records and the issuance-outbox lease
+state machine. Claim work in a short transaction, bind it to the pinned policy
+id/version and lineage ids, and make expiry/reclaim owner-safe. Do not load a
+private key, call the Permit signer, persist credential bytes, deliver claims,
+add an HTTP listener, or introduce subscription policy in the same change.
+Record the schema migration, crash points, retry taxonomy, and emitted rows
+before adding worker mutations.
 
 ## M0 — Architecture foundation
 
@@ -28,7 +29,7 @@ typed failures before adding the adapter.
 - [x] Pancake signature verification with captured protocol fixtures
 - [x] Active order verification before fulfillment
 - [x] Durable order projection and transactional issuance outbox
-- [ ] Offer-to-Permit policy mapping
+- [x] Offer-to-Permit policy mapping
 - [ ] Permit credential issuance and one-time claim delivery
 - [ ] Refund and operator replay flow
 - [ ] Sandbox end-to-end evidence and runbook

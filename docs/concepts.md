@@ -22,6 +22,11 @@ The smallest thing a customer can intentionally buy. An Offer binds:
 `taskly-pro-lifetime` is an Offer. A Pancake product id and a ZPAY product name
 are provider mappings for that Offer; they are not the Offer's identity.
 
+An Offer references one immutable Permit policy id. A rights change creates a
+new policy id and audit version instead of changing the meaning of the old id.
+Offer definitions retired from checkout remain available for delayed
+fulfillment and refunds while their journal/outbox/lineage records are retained.
+
 ## Payment event
 
 An immutable provider fact emitted only after native authentication and
@@ -65,6 +70,11 @@ idempotently.
 The server-side operation that resolves an Offer's policy, loads the entitlement
 lineage, creates a complete next revision, signs it through `permit/issuer`, and
 records delivery. Issuance is asynchronous and idempotent.
+
+`commerce/permit` implements only the pure preparation boundary today. It maps
+a one-time grant to revision 0 or a withdrawal to a successor whose use window
+ends at issuance, then returns the complete Permit payload and its exact
+serialized bytes. It does not sign, persist, lease, or deliver anything.
 
 ## Claim
 

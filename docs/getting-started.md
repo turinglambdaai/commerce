@@ -95,6 +95,38 @@ Each projector call commits the order, newly emitted issuance work, and source
 sequence marker together. The outbox row remains `pending`; this release does
 not call Permit or deliver a credential.
 
+The separate Permit adapter prepares, but does not sign, complete rights
+snapshots:
+
+```racket
+(require commerce/permit)
+
+(define pro-policy
+  (make-permit-entitlement-policy
+   "taskly-pro-v1" 1
+   #:subject-type 'person
+   #:grants
+   (list (make-permit-grant-policy
+          #:products '("taskly")
+          #:edition "pro"))))
+
+(define policy-catalog
+  (make-permit-policy-catalog (list configured-offer)
+                              (list pro-policy)))
+
+(define snapshot-request
+  (prepare-permit-snapshot
+   policy-catalog grant-intent
+   #:issuer "com.example"
+   #:credential-id stable-credential-id
+   #:entitlement-id stable-entitlement-id
+   #:issued-at "2026-10-17T03:00:00Z"))
+```
+
+The Offer pins the immutable policy id. The result contains a Permit-validated
+payload and the exact bytes a future signer must consume. A withdrawal also
+requires the previous complete snapshot; no private key or signer is used here.
+
 ## 3. Run the first purchase
 
 ```bash
@@ -110,7 +142,8 @@ emitting a second intent.
 
 ```bash
 raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
-  commerce-test/pancake-test.rkt
+  commerce-test/storage-test.rkt commerce-test/pancake-test.rkt \
+  commerce-test/permit-test.rkt
 ```
 
 The tests show the intended answers to the first difficult questions:
@@ -128,6 +161,8 @@ The tests show the intended answers to the first difficult questions:
   substitution fail before a canonical event exists?
 - Which database rows prove that order projection and issuance work committed
   together, and what remains after an injected crash?
+- How do policy version pinning, deleted Offers, invalid policy, and mismatched
+  entitlement lineage fail before a signer sees bytes?
 
 ## 5. Understand the boundary
 
@@ -148,6 +183,7 @@ mode, and fixture evidence in the provider contract first.
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
   commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
+  commerce/permit.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
@@ -155,6 +191,7 @@ raco setup --check-pkg-deps commerce
 
 The first production provider is Pancake. Signature conformance and active
 one-time-order verification plus durable journal/projection/outbox processing
-are implemented; Permit policy/signing and live sandbox evidence remain
-separate M1 gates in [ROADMAP.md](../ROADMAP.md).
+and Permit snapshot policy mapping are implemented; lineage persistence,
+signing, delivery, and live sandbox evidence remain separate M1 gates in
+[ROADMAP.md](../ROADMAP.md).
 

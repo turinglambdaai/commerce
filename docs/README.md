@@ -39,6 +39,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0004: Pancake webhook authentication boundary](decisions/0004-pancake-webhook-authentication.md)
 - [ADR-0005: Pancake active one-time order verification](decisions/0005-pancake-active-order-verification.md)
 - [ADR-0006: SQLite order projection and issuance outbox](decisions/0006-sqlite-projection-and-issuance-outbox.md)
+- [ADR-0007: Versioned Offer-to-Permit policy mapping](decisions/0007-offer-to-permit-policy-mapping.md)
 
 ## Source entry points
 
@@ -51,6 +52,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/storage.rkt` | durable projection and outbox protocol |
 | `commerce/storage/sqlite.rkt` | SQLite journal/projection/outbox backend |
 | `commerce/pancake.rkt` | Pancake webhook authentication and active order proof |
+| `commerce/permit.rkt` | versioned Offer policy to complete Permit snapshots |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |
 | `examples/` | copyable newcomer paths |

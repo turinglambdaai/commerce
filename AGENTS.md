@@ -75,6 +75,9 @@ headless service core may not depend on a UI framework.
 - `(require commerce/pancake)` authenticates exact Pancake webhook bytes, signs
   the bounded merchant order read, and constructs a canonical event only after
   the active one-time order matches its server-side checkout binding.
+- `(require commerce/permit)` maps reviewed, version-pinned Offer policy to a
+  complete Permit snapshot. It is server-side and intentionally not re-exported
+  from the default facade.
 - Network listeners, persistence, provider SDKs, and Permit issuer adapters use
   explicit modules and are never re-exported from `commerce`.
 - Implementation-only helpers belong under `commerce/private/`.
@@ -96,6 +99,7 @@ headless service core may not depend on a UI framework.
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
   commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
+  commerce/permit.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

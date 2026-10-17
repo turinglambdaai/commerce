@@ -65,6 +65,13 @@ work: it writes only a typed blocked marker. Order, outbox, and projected marker
 writes otherwise commit or roll back together. Pending outbox rows are workflow
 state, not credentials or authorization evidence.
 
+Offer-to-Permit mapping resolves an immutable policy id and delegates closed
+snapshot validation and serialization to the published `permit/issuer` API.
+Commerce rejects unknown/deleted Offers, product-scope mismatch, unsupported
+subscription policy, and issuer/subject/entitlement lineage mismatch before a
+signer is involved. The returned bytes are the only bytes a future signer may
+consume; rebuilding their JSON would violate Permit's exact-byte boundary.
+
 ## Key custody
 
 No production private key or provider secret is committed, bundled, printed, or

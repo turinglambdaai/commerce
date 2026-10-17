@@ -20,7 +20,8 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 
 当前版本已经包含纯事件核心、重放冲突防护、订单投影、权益意图、渠道边界、
 持久 SQLite 原始事件 journal、Pancake 原始字节验签与一次性订单主动查验、测试
-和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化。
+和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化，Offer policy
+也已能生成版本固定、完整且经过 Permit 校验的权益快照。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -116,6 +117,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/storage)   ; 持久投影/outbox 操作
 (require commerce/storage/sqlite) ; SQLite 服务存储后端
 (require commerce/pancake)   ; Pancake 鉴权与主动订单证明
+(require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -140,18 +142,20 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 带商户签名的 Pancake GraphQL 查单：在构造规范支付事件前，将已完成的一次性
   订单与商店、环境、外部结账引用、商品、成功支付、精确币种/金额、稳定主体和
   Offer 全部绑定；
+- 显式 `commerce/permit` adapter：复用 Permit 校验版本固定的 Offer policy，
+  生成完整 revision 0 grant 或在签发时到期的 withdrawal successor 及其精确字节；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
 - Webhook HTTP 端点；
 - ZPAY 或应用商店 adapter；
-- Permit issuer 集成和 credential 交付；
+- 持久 entitlement lineage、Permit 签名和 credential 交付；
 - 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的 Offer 到 Permit policy 映射。
-缺口保持公开，避免把架构完成误当成生产就绪。
+下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的持久 entitlement lineage 与
+带 owner 校验的 outbox lease 状态机。缺口保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 
@@ -159,6 +163,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 raco pkg install --auto --no-docs --name commerce .
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
   commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
+  commerce/permit.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

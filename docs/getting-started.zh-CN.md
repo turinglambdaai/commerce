@@ -91,6 +91,37 @@ Pancake 边缘模块在显式环境中认证原始请求字节：
 每次 projector 调用把订单、新产生的签发工作与来源序列标记一起提交。outbox 行
 仍保持 `pending`；当前版本不会调用 Permit 或交付 credential。
 
+独立的 Permit adapter 只准备完整权益快照，不做签名：
+
+```racket
+(require commerce/permit)
+
+(define pro-policy
+  (make-permit-entitlement-policy
+   "taskly-pro-v1" 1
+   #:subject-type 'person
+   #:grants
+   (list (make-permit-grant-policy
+          #:products '("taskly")
+          #:edition "pro"))))
+
+(define policy-catalog
+  (make-permit-policy-catalog (list configured-offer)
+                              (list pro-policy)))
+
+(define snapshot-request
+  (prepare-permit-snapshot
+   policy-catalog grant-intent
+   #:issuer "com.example"
+   #:credential-id stable-credential-id
+   #:entitlement-id stable-entitlement-id
+   #:issued-at "2026-10-17T03:00:00Z"))
+```
+
+Offer 固定引用不可变 policy id。结果包含经过 Permit 校验的 payload，以及未来
+signer 必须直接消费的精确字节。withdrawal 还必须提供上一份完整 snapshot；
+这里不会接触私钥或 signer。
+
 ## 3. 跑通第一笔购买
 
 ```bash
@@ -105,7 +136,8 @@ racket examples/first-purchase.rkt
 
 ```bash
 raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
-  commerce-test/pancake-test.rkt
+  commerce-test/storage-test.rkt commerce-test/pancake-test.rkt \
+  commerce-test/permit-test.rkt
 ```
 
 测试直接回答首批最难的问题：
@@ -120,6 +152,8 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
 - Pancake 到底签了哪些原始字节，过期、跨环境或有歧义的已签请求如何关闭失败？
 - 商户查单请求具体签了什么，主动订单中任一字段被替换时为何无法产生规范事件？
 - 哪些数据库行能证明订单投影与签发工作一起提交，注入崩溃后又会留下什么？
+- policy 版本固定、Offer 删除、无效 policy 与 lineage 不匹配如何在 signer
+  接触字节前关闭失败？
 
 ## 5. 理解边界
 
@@ -139,12 +173,14 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
   commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
+  commerce/permit.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
 首个真实渠道是 Pancake。签名协议一致性、一次性订单主动查验以及 journal /
-投影 / outbox 持久处理已经实现；Permit policy/签发与真实 sandbox 证据仍是
-[ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
+投影 / outbox 持久处理和 Permit snapshot policy 映射已经实现；lineage 持久化、
+签名、交付与真实 sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的
+M1 门禁。
 

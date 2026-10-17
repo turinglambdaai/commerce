@@ -6,6 +6,11 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add validated, version-pinned Offer-to-Permit policy mapping for one-time
+  grants and issuance-expiring withdrawal successors. Active and retained
+  retired Offers resolve deterministically; unknown, deleted, mismatched, and
+  invalid policy or lineage inputs fail with typed Commerce errors before
+  signing.
 - Add SQLite schema v2 with replayable order projection, durable projection
   outcomes, and transactional issuance-outbox insertion. Schema v1 migrates in
   place, deterministic conflicts become durable blocked work, and injected

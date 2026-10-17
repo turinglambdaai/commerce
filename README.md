@@ -24,7 +24,8 @@ The current release provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
 event journal, exact-byte Pancake webhook authentication, active Pancake
 one-time-order verification, transactional durable projection/outbox storage,
-tests, and one runnable purchase walkthrough.
+version-pinned Offer-to-Permit snapshot mapping, tests, and one runnable
+purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -128,6 +129,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/storage)   ; durable projection/outbox operations
 (require commerce/storage/sqlite) ; SQLite service-storage backend
 (require commerce/pancake)   ; Pancake authentication and active order proof
+(require commerce/permit)    ; reviewed Offer policy to Permit snapshots
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -155,19 +157,22 @@ Implemented now:
   its store, environment, external checkout reference, product, succeeded
   payment, exact currency/amount, stable subject, and Offer before constructing
   a canonical payment event;
+- an explicit `commerce/permit` adapter that validates version-pinned Offer
+  policy through Permit and prepares complete revision-0 grants or withdrawal
+  successors that expire at issuance, plus their exact serialized bytes;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - webhook HTTP endpoints;
 - ZPAY or app-store adapters;
-- Permit issuer integration and credential delivery;
+- durable entitlement lineage, Permit signing, and credential delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is Offer-to-Permit policy mapping, as described in
-[ROADMAP.md](ROADMAP.md). Honest gaps remain visible so architecture does not
-get mistaken for production readiness.
+The next bounded slice is durable entitlement lineage plus an owner-safe outbox
+lease state machine, as described in [ROADMAP.md](ROADMAP.md). Honest gaps
+remain visible so architecture does not get mistaken for production readiness.
 
 ## Development
 
@@ -175,6 +180,7 @@ get mistaken for production readiness.
 raco pkg install --auto --no-docs --name commerce .
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
   commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
+  commerce/permit.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

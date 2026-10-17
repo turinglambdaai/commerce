@@ -36,6 +36,12 @@ Commerce. Rivet, Glaze, and Keel never import Commerce. An operator UI may be a
 separate Glaze product without making the headless Commerce service depend on
 Glaze.
 
+The current `commerce/permit` adapter consumes only Permit's published snapshot
+constructors. It resolves reviewed Offer policy and returns a validated complete
+payload plus immutable exact bytes; it does not yet call the signer. Signing,
+key custody, lineage persistence, and claim delivery remain later explicit
+server capabilities.
+
 ## Product composition
 
 A free product needs neither Permit nor Commerce. A manually fulfilled or
