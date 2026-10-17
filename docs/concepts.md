@@ -42,6 +42,10 @@ refund evidence. It is rebuildable from the journal.
 The core tolerates out-of-order delivery. If refund evidence arrives before
 payment evidence, the later payment never produces a grant.
 
+The SQLite projector stores this view only after journal acceptance. Its order
+write and any resulting issuance-outbox insertion share one transaction; the
+projection remains rebuildable from immutable journal rows.
+
 ## Rights intent
 
 An auditable request produced by a commercial transition. `grant` means the
@@ -51,6 +55,10 @@ means the policy must respond to refund/chargeback evidence.
 A rights intent is not itself authorization, and `withdraw` is not a claim that
 an offline credential has been remotely revoked. The Permit integration chooses
 the honest mechanism available to that product.
+
+Durable rights intents begin as `pending` issuance-outbox rows. They contain no
+credential and grant no rights. Future workers lease and execute them
+idempotently.
 
 ## Issuance
 

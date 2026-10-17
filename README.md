@@ -23,7 +23,8 @@ rights. Commerce owns the durable orchestration between them.
 The current release provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
 event journal, exact-byte Pancake webhook authentication, active Pancake
-one-time-order verification, tests, and one runnable purchase walkthrough.
+one-time-order verification, transactional durable projection/outbox storage,
+tests, and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -124,7 +125,8 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce)           ; pure domain model and state transitions
 (require commerce/provider)  ; server-side provider adapter boundary
 (require commerce/journal)   ; durable event-acceptance contract
-(require commerce/journal/sqlite) ; SQLite journal backend
+(require commerce/storage)   ; durable projection/outbox operations
+(require commerce/storage/sqlite) ; SQLite service-storage backend
 (require commerce/pancake)   ; Pancake authentication and active order proof
 ```
 
@@ -144,6 +146,9 @@ Implemented now:
 - a provider adapter contract and mock walkthrough;
 - a durable SQLite raw-event journal with digest verification, exact replay,
   conflicting-replay rejection, and database-enforced immutable rows;
+- SQLite schema v2 with in-place v1 migration, deterministic journal
+  projection, durable blocked-event outcomes, and atomic order plus issuance
+  outbox writes;
 - exact-byte Pancake RSA-SHA256 verification with explicit environment keys,
   bounded replay tolerance, mode binding, and redacted typed failures;
 - signed Pancake merchant GraphQL reads that bind a completed one-time order to
@@ -154,22 +159,22 @@ Implemented now:
 
 Not implemented yet:
 
-- durable order projections/outbox and webhook HTTP endpoints;
+- webhook HTTP endpoints;
 - ZPAY or app-store adapters;
 - Permit issuer integration and credential delivery;
 - subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is transactional durable order projection plus issuance
-outbox insertion, as described in [ROADMAP.md](ROADMAP.md). Honest gaps remain
-visible so architecture does not get mistaken for production readiness.
+The next bounded slice is Offer-to-Permit policy mapping, as described in
+[ROADMAP.md](ROADMAP.md). Honest gaps remain visible so architecture does not
+get mistaken for production readiness.
 
 ## Development
 
 ```bash
 raco pkg install --auto --no-docs --name commerce .
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt commerce/pancake.rkt \
+  commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

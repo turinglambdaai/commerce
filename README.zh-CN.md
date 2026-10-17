@@ -20,7 +20,7 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 
 当前版本已经包含纯事件核心、重放冲突防护、订单投影、权益意图、渠道边界、
 持久 SQLite 原始事件 journal、Pancake 原始字节验签与一次性订单主动查验、测试
-和一条完整的购买演示。
+和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -113,7 +113,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce)           ; 纯领域模型与状态转换
 (require commerce/provider)  ; 服务端渠道 adapter 边界
 (require commerce/journal)   ; 持久事件接收契约
-(require commerce/journal/sqlite) ; SQLite journal 后端
+(require commerce/storage)   ; 持久投影/outbox 操作
+(require commerce/storage/sqlite) ; SQLite 服务存储后端
 (require commerce/pancake)   ; Pancake 鉴权与主动订单证明
 ```
 
@@ -132,6 +133,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 渠道 adapter 契约与 mock 购买演示；
 - 持久 SQLite 原始事件 journal，包含摘要复核、精确重放、冲突拒绝和数据库级
   不可变保护；
+- SQLite schema v2，包含 v1 原位迁移、确定性 journal 投影、持久 blocked 结果，
+  以及订单与签发 outbox 的原子写入；
 - Pancake RSA-SHA256 原始字节验签，包含显式环境密钥、有限重放窗口、mode 绑定
   和脱敏的类型化错误；
 - 带商户签名的 Pancake GraphQL 查单：在构造规范支付事件前，将已完成的一次性
@@ -141,21 +144,21 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 
 尚未实现：
 
-- 订单投影/outbox 持久化与 Webhook HTTP 端点；
+- Webhook HTTP 端点；
 - ZPAY 或应用商店 adapter；
 - Permit issuer 集成和 credential 交付；
 - 订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的“订单投影与签发 outbox
-同事务持久化”。缺口保持公开，避免把架构完成误当成生产就绪。
+下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的 Offer 到 Permit policy 映射。
+缺口保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 
 ```bash
 raco pkg install --auto --no-docs --name commerce .
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt commerce/pancake.rkt \
+  commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

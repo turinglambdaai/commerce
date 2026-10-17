@@ -33,7 +33,8 @@ Services that durably accept authenticated events explicitly add:
 
 ```racket
 (require commerce/journal
-         commerce/journal/sqlite)
+         commerce/storage
+         commerce/storage/sqlite)
 ```
 
 The Pancake edge authenticates exact request bytes in an explicit environment:
@@ -75,6 +76,25 @@ match. The private key is deployment-injected and never committed. The external
 reference resolves to the Offer and stable subject in server storage; it is not
 an email, subject id, or client-provided claim.
 
+Durable acceptance and projection are intentionally two operations:
+
+```racket
+(define storage (open-sqlite-commerce-storage database-path))
+
+;; Return the provider acknowledgement after this commit succeeds.
+(journal-accept! storage raw-body canonical-event
+                 #:received-at receive-time)
+
+;; Run outside the webhook request. #f means there is no pending sequence.
+(let project-pending ()
+  (when (storage-project-next! storage #:processed-at (current-seconds))
+    (project-pending)))
+```
+
+Each projector call commits the order, newly emitted issuance work, and source
+sequence marker together. The outbox row remains `pending`; this release does
+not call Permit or deliver a credential.
+
 ## 3. Run the first purchase
 
 ```bash
@@ -106,6 +126,8 @@ The tests show the intended answers to the first difficult questions:
   ambiguous signed requests fail?
 - What exact merchant request is signed, and how does every active order
   substitution fail before a canonical event exists?
+- Which database rows prove that order projection and issuance work committed
+  together, and what remains after an injected crash?
 
 ## 5. Understand the boundary
 
@@ -125,13 +147,14 @@ mode, and fixture evidence in the provider contract first.
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt commerce/pancake.rkt \
+  commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
 The first production provider is Pancake. Signature conformance and active
-one-time-order verification are implemented; durable processing and live
-sandbox evidence remain separate M1 gates in [ROADMAP.md](../ROADMAP.md).
+one-time-order verification plus durable journal/projection/outbox processing
+are implemented; Permit policy/signing and live sandbox evidence remain
+separate M1 gates in [ROADMAP.md](../ROADMAP.md).
 

@@ -59,6 +59,12 @@ SQLite journal rows are protected against application-level `UPDATE` and
 from a private copy of the authenticated bytes before writing. These controls
 do not replace filesystem access control, encrypted backups, or host security.
 
+Schema v2 keeps journal evidence immutable while projections remain rebuildable
+views. A projector conflict cannot alter the previous order or create issuance
+work: it writes only a typed blocked marker. Order, outbox, and projected marker
+writes otherwise commit or roll back together. Pending outbox rows are workflow
+state, not credentials or authorization evidence.
+
 ## Key custody
 
 No production private key or provider secret is committed, bundled, printed, or

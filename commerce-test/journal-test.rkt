@@ -2,8 +2,9 @@
 
 (require commerce
          commerce/journal
-         commerce/journal/sqlite
          commerce/provider
+         commerce/storage
+         commerce/storage/sqlite
          db
          file/sha1
          rackunit
@@ -49,23 +50,23 @@
    (lambda (path)
      (define payload #"{\"id\":\"evt_001\",\"paid\":true}")
      (define accepted-event (event payload))
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (define result
        (journal-accept! journal payload accepted-event #:received-at 1792108810))
      (check-eq? (journal-acceptance-disposition result) 'accepted)
      (check-equal? (journal-record-sequence
                     (journal-acceptance-record result))
                    1)
-     (journal-close journal)
+     (storage-close journal)
 
      ;; A fresh connection proves the acknowledgement was returned only after
      ;; the row survived the original connection.
-     (define reopened (open-sqlite-event-journal path))
+     (define reopened (open-sqlite-commerce-storage path))
      (define record (journal-ref reopened "mock" "evt_001"))
      (check-equal? (journal-record-payload record) payload)
      (check-equal? (journal-record-event record) accepted-event)
      (check-equal? (journal-record-received-at record) 1792108810)
-     (journal-close reopened)
+     (storage-close reopened)
 
      ;; Inspect the persistence artifact, not only the public wrapper.
      (define connection
@@ -91,13 +92,13 @@ SQL
    (lambda (path)
      (define payload #"same authenticated request")
      (define accepted-event (event payload))
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (define first
        (journal-accept! journal payload accepted-event #:received-at 10))
-     (journal-close journal)
+     (storage-close journal)
 
      ;; Provider retries remain idempotent across service restarts.
-     (define reopened (open-sqlite-event-journal path))
+     (define reopened (open-sqlite-commerce-storage path))
      (define replay
        (journal-accept! reopened payload accepted-event #:received-at 20))
      (check-eq? (journal-acceptance-disposition first) 'accepted)
@@ -108,7 +109,7 @@ SQL
      (check-equal? (journal-record-received-at
                     (journal-acceptance-record replay))
                    10)
-     (journal-close reopened)
+     (storage-close reopened)
 
      (define connection
        (sqlite3-connect #:database path #:mode 'read-only))
@@ -122,7 +123,7 @@ SQL
    (lambda (path)
      (define first-payload #"first")
      (define changed-payload #"changed")
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (journal-accept! journal first-payload (event first-payload)
                       #:received-at 10)
      (check-exn
@@ -134,13 +135,13 @@ SQL
                          #:received-at 20)))
      (define record (journal-ref journal "mock" "evt_001"))
      (check-equal? (journal-record-payload record) first-payload)
-     (journal-close journal))))
+     (storage-close journal))))
 
 (test-case "same raw payload with changed canonical meaning fails closed"
   (call-with-temporary-database
    (lambda (path)
      (define payload #"one authenticated request")
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (journal-accept! journal payload (event payload) #:received-at 10)
      (check-exn
       (lambda (failure)
@@ -150,13 +151,13 @@ SQL
         (journal-accept! journal payload
                          (event payload #:subject "customer-002")
                          #:received-at 20)))
-     (journal-close journal))))
+     (storage-close journal))))
 
 (test-case "payload digest mismatch is rejected without a row"
   (call-with-temporary-database
    (lambda (path)
      (define payload #"authenticated body")
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (define mismatched
        (make-verified-payment-event
         "mock" "evt_001" (make-string 64 #\a) 'payment-succeeded
@@ -169,15 +170,15 @@ SQL
       (lambda ()
         (journal-accept! journal payload mismatched #:received-at 10)))
      (check-false (journal-ref journal "mock" "evt_001"))
-     (journal-close journal))))
+     (storage-close journal))))
 
 (test-case "database rejects mutation and deletion of accepted evidence"
   (call-with-temporary-database
    (lambda (path)
      (define payload #"immutable authenticated request")
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (journal-accept! journal payload (event payload) #:received-at 10)
-     (journal-close journal)
+     (storage-close journal)
 
      (define connection
        (sqlite3-connect #:database path #:mode 'read/write))
@@ -201,10 +202,10 @@ SQL
    (lambda (path)
      (define payload (bytes 1 2 3 4))
      (define accepted-event (event payload))
-     (define journal (open-sqlite-event-journal path))
+     (define journal (open-sqlite-commerce-storage path))
      (journal-accept! journal payload accepted-event #:received-at 10)
      (bytes-set! payload 0 255)
      (check-equal?
       (journal-record-payload (journal-ref journal "mock" "evt_001"))
       (bytes->immutable-bytes (bytes 1 2 3 4)))
-     (journal-close journal))))
+     (storage-close journal))))

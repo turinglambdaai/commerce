@@ -33,8 +33,10 @@ history.
 
 ## Journal evidence
 
-The SQLite journal uses application id `COMM` and schema version 1. Operational
-inspection should select identifiers and status metadata, not `raw_payload`:
+The SQLite service store uses application id `COMM` and schema version 2.
+Opening a schema-v1 journal migrates it in place and leaves existing evidence
+pending for projection. Operational inspection should select identifiers and
+status metadata, not `raw_payload`:
 
 ```sql
 SELECT sequence, provider, event_id, event_kind, order_id, received_at
@@ -46,6 +48,24 @@ Rows reject ordinary `UPDATE` and `DELETE`. Repair or future retention requires
 a versioned, audited database operation; disabling the triggers for routine
 customer support is not a supported workflow.
 
+Projection progress and pending issuance work are inspected separately:
+
+```sql
+SELECT journal_sequence, status, failure_code, processed_at
+FROM commerce_projection_event
+ORDER BY journal_sequence;
+
+SELECT id, idempotency_key, status, attempts, available_at,
+       lease_owner, lease_expires_at, last_error_code
+FROM commerce_issuance_outbox
+ORDER BY id;
+```
+
+A missing projection-event row is safe pending work. `blocked` is terminal for
+automatic projection and requires operator review. A projector crash within a
+transaction leaves no order, outbox, or marker changes and the same journal
+sequence is selected again.
+
 ## Stuck work
 
 The operator surface distinguishes:
@@ -55,8 +75,16 @@ The operator surface distinguishes:
 - credential signed but delivery unclaimed;
 - retry scheduled versus terminal operator action required.
 
-Every retry is bounded and observable. Poison work moves to a quarantine queue
-with the typed reason and safe replay command.
+Every retry is bounded and observable. The current projector records
+deterministic poison work as a durable `blocked` marker with a typed reason;
+the operator replay command and broader quarantine workflow remain future work.
+
+Issuance rows are currently inserted only as `pending`; Permit worker mutations
+are not implemented yet. The fixed workflow contract is: claim in a short
+transaction, set `processing`, increment `attempts`, and store an opaque owner
+and expiry; active leases are exclusive and expired leases are reclaimable.
+Signing occurs outside that claim transaction, followed by owner-checked
+completion. No worker may infer authorization merely from outbox status.
 
 Pancake active reads make one transport attempt with a five-second connect
 limit and separate ten-second limits for receiving response headers and the

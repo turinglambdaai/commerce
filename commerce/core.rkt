@@ -23,10 +23,9 @@
  ingest-payment-event
  (struct-out exn:fail:commerce))
 
-(require racket/format
-         racket/hash
-         racket/match
-         "private/model.rkt")
+(require racket/hash
+         "private/model.rkt"
+         "private/projection.rkt")
 
 (define (empty-commerce-state)
   (commerce-state (hash) (hash) (hash)))
@@ -59,51 +58,10 @@
 (define (order-key event)
   (cons (payment-event-provider event) (payment-event-order-id event)))
 
-(define (intent-key event action)
-  (format "~a/~a/~a"
-          (payment-event-provider event)
-          (payment-event-order-id event)
-          action))
-
 (define (event-content=? left right)
   (and (equal? (payment-event-payload-digest left)
                (payment-event-payload-digest right))
        (equal? left right)))
-
-(define (ensure-order-consistency previous event)
-  (when previous
-    (define same?
-      (and (equal? (order-projection-offer-id previous)
-                   (payment-event-offer-id event))
-           (equal? (order-projection-subject-id previous)
-                   (payment-event-subject-id event))
-           (equal? (order-projection-amount previous)
-                   (payment-event-amount event))))
-    (unless same?
-      (raise-commerce
-       'order-conflict
-       "provider order changed offer, subject, or amount across events"
-       (hash 'provider (payment-event-provider event)
-             'order-id (payment-event-order-id event))))))
-
-(define (initial-order event)
-  (order-projection
-   (payment-event-provider event)
-   (payment-event-order-id event)
-   (payment-event-offer-id event)
-   (payment-event-subject-id event)
-   (payment-event-amount event)
-   #f #f #f #f))
-
-(define (make-intent event action)
-  (rights-intent
-   (intent-key event action)
-   action
-   (payment-event-provider event)
-   (payment-event-order-id event)
-   (payment-event-offer-id event)
-   (payment-event-subject-id event)
-   (payment-event-occurred-at event)))
 
 ;; Returns two values: the new immutable state and the rights intents newly
 ;; emitted by this transition. An exact replay returns the original state and
@@ -130,47 +88,8 @@
     (define o-key (order-key event))
     (define previous-order
       (hash-ref (commerce-state-orders state) o-key #f))
-    (ensure-order-consistency previous-order event)
-    (define base-order (or previous-order (initial-order event)))
-
     (define-values (next-order new-intents)
-      (match (payment-event-kind event)
-        ['payment-succeeded
-         (cond
-           [(order-projection-paid? base-order)
-            (values base-order '())]
-           [(order-projection-refunded? base-order)
-            ;; Refund arrived first. Retain both facts, but never grant rights
-            ;; for an order already known to be refunded.
-           (values
-            (struct-copy order-projection base-order
-                         [paid? #t]
-                         [paid-at (payment-event-occurred-at event)])
-            '())]
-           [else
-            (define intent (make-intent event 'grant))
-            (values
-             (struct-copy order-projection base-order
-                          [paid? #t]
-                          [paid-at (payment-event-occurred-at event)])
-             (list intent))])]
-        ['payment-refunded
-         (cond
-           [(order-projection-refunded? base-order)
-            (values base-order '())]
-           [(order-projection-paid? base-order)
-            (define intent (make-intent event 'withdraw))
-            (values
-             (struct-copy order-projection base-order
-                          [refunded? #t]
-                          [refunded-at (payment-event-occurred-at event)])
-             (list intent))]
-           [else
-            (values
-             (struct-copy order-projection base-order
-                          [refunded? #t]
-                          [refunded-at (payment-event-occurred-at event)])
-             '())])]))
+      (project-order-event previous-order event))
 
     (define next-events
       (hash-set (commerce-state-events state) e-key event))

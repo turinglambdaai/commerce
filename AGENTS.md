@@ -69,8 +69,9 @@ headless service core may not depend on a UI framework.
 - `(require commerce)` is pure and safe for deterministic domain work.
 - `(require commerce/provider)` is server-side integration surface. It owns the
   only public constructor for verified canonical payment events.
-- `(require commerce/journal)` defines durable acceptance semantics;
-  `(require commerce/journal/sqlite)` selects the first filesystem backend.
+- `(require commerce/journal)` defines immutable acceptance semantics;
+  `(require commerce/storage)` owns projection/outbox operations and
+  `(require commerce/storage/sqlite)` selects the single-node backend.
 - `(require commerce/pancake)` authenticates exact Pancake webhook bytes, signs
   the bounded merchant order read, and constructs a canonical event only after
   the active one-time order matches its server-side checkout binding.
@@ -94,7 +95,7 @@ headless service core may not depend on a UI framework.
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt commerce/pancake.rkt \
+  commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce

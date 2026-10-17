@@ -3,12 +3,13 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is the first unchecked M1 slice. Take durable
-order projection and issuance-outbox insertion as one atomic transaction after
-journal acceptance. Do not add Offer-to-Permit policy mapping, Permit signing,
-claim delivery, an HTTP listener, or subscriptions in the same change. Record
-the crash points, replay behavior, schema migration, worker claim/lease rules,
-and emitted database rows before adding the write path.
+The next implementation handoff is the first unchecked M1 slice. Take only the
+Offer-to-Permit policy mapping: define the validated policy input and complete
+rights snapshot requested from Permit for a one-time grant or withdrawal. Do
+not call a signer, mutate outbox workflow state, deliver claims, add an HTTP
+listener, or introduce subscription policy in the same change. Record policy
+versioning, unknown/deleted Offer behavior, entitlement lineage inputs, and
+typed failures before adding the adapter.
 
 ## M0 — Architecture foundation
 
@@ -26,7 +27,7 @@ and emitted database rows before adding the write path.
 - [x] Immutable raw webhook journal
 - [x] Pancake signature verification with captured protocol fixtures
 - [x] Active order verification before fulfillment
-- [ ] Durable order projection and transactional issuance outbox
+- [x] Durable order projection and transactional issuance outbox
 - [ ] Offer-to-Permit policy mapping
 - [ ] Permit credential issuance and one-time claim delivery
 - [ ] Refund and operator replay flow

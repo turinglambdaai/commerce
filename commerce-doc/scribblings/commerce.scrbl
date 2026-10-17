@@ -187,24 +187,25 @@ production callers normally leave them at their secure defaults.
 
 @section{Durable event journal}
 
-Server processes explicitly require @filepath{commerce/journal.rkt}. The
-filesystem backend is selected separately with
-@filepath{commerce/journal/sqlite.rkt}; neither module is re-exported from the
-default product-safe facade.
+Server processes explicitly require @filepath{commerce/journal.rkt},
+@filepath{commerce/storage.rkt}, and
+@filepath{commerce/storage/sqlite.rkt}. None is re-exported from the default
+product-safe facade.
 
 @verbatim{
-(open-sqlite-event-journal database-path) -> event-journal?
+(open-sqlite-commerce-storage database-path) -> commerce-storage?
   database-path : path-string?
 }
 
-Opens or creates a Commerce-owned SQLite database. Schema v1 uses WAL mode,
-full commit synchronization, and database triggers that reject updates or
-deletes of accepted event rows.
+Opens or creates a Commerce-owned SQLite database. Schema v2 uses WAL mode,
+full commit synchronization, foreign keys, and database triggers that reject
+updates or deletes of accepted event rows. A schema-v1 journal migrates in
+place without changing its existing rows.
 
 @verbatim{
-(journal-accept! journal raw-payload event #:received-at received-at)
+(journal-accept! storage raw-payload event #:received-at received-at)
   -> journal-acceptance?
-  journal     : event-journal?
+  storage     : commerce-storage?
   raw-payload : bytes?
   event       : payment-event?
   received-at : exact-nonnegative-integer?
@@ -218,14 +219,48 @@ The same provider event id with changed raw or canonical content raises an
 rejected before persistence.
 
 @verbatim{
-(journal-ref journal provider event-id)
+(journal-ref storage provider event-id)
   -> (or/c journal-record? #f)
-
-(journal-close journal) -> void?
 }
 
 @tt{journal-ref} returns the original sequence, canonical event, immutable raw
-payload, and receive time. Call @tt{journal-close} during service shutdown.
+payload, and receive time.
+
+@section{Durable projection and issuance outbox}
+
+Journal acknowledgement and projection are separate durability phases.
+Projection runs outside the provider request:
+
+@verbatim{
+(storage-project-next! storage #:processed-at processed-at)
+  -> (or/c projection-result? #f)
+  processed-at : exact-nonnegative-integer?
+}
+
+Selects the lowest unprocessed journal sequence and atomically writes its order
+projection, any newly emitted issuance-outbox row, and its processing marker.
+It returns @tt{#f} when no sequence is pending. A successful result has
+disposition @tt{'projected}; an order identity conflict has disposition
+@tt{'blocked}, failure code @tt{'order-conflict}, no new outbox items, and
+leaves the previous order unchanged.
+
+@verbatim{
+(storage-order-ref storage provider order-id)
+  -> (or/c order-projection? #f)
+
+(storage-outbox-ref storage idempotency-key)
+  -> (or/c issuance-outbox-item? #f)
+
+(storage-close storage) -> void?
+}
+
+@tt{projection-result} exposes disposition, journal sequence, resulting order,
+new outbox items, and optional failure code. Each
+@tt{issuance-outbox-item} exposes its stable idempotency key, source sequence,
+rights action and commercial identifiers, occurrence time, and workflow state.
+New rows are @tt{'pending} with zero attempts and no lease. This release does
+not expose lease mutation or Permit signing APIs. Call @tt{storage-close}
+during service shutdown.
 
 @section{First purchase}
 

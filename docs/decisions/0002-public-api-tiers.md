@@ -2,6 +2,8 @@
 
 Status: accepted, 2026-10-16
 
+Module naming for the expanded SQLite service store was updated by ADR-0006.
+
 ## Context
 
 Products need stable commercial values and perhaps a thin online client.

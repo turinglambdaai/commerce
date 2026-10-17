@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add SQLite schema v2 with replayable order projection, durable projection
+  outcomes, and transactional issuance-outbox insertion. Schema v1 migrates in
+  place, deterministic conflicts become durable blocked work, and injected
+  write failures prove order/outbox/marker rollback as one unit.
 - Add signed Pancake merchant GraphQL reads and active one-time-order
   verification. A completed order must match its webhook, environment, store,
   checkout binding, product, succeeded payment, currency, and exact minor-unit

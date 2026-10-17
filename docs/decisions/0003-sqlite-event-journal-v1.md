@@ -1,6 +1,6 @@
 # ADR-0003: SQLite event journal v1
 
-Status: accepted, 2026-10-16
+Status: superseded by ADR-0006, 2026-10-17
 
 ## Context
 

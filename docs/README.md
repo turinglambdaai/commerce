@@ -38,6 +38,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0003: SQLite event journal v1](decisions/0003-sqlite-event-journal-v1.md)
 - [ADR-0004: Pancake webhook authentication boundary](decisions/0004-pancake-webhook-authentication.md)
 - [ADR-0005: Pancake active one-time order verification](decisions/0005-pancake-active-order-verification.md)
+- [ADR-0006: SQLite order projection and issuance outbox](decisions/0006-sqlite-projection-and-issuance-outbox.md)
 
 ## Source entry points
 
@@ -47,7 +48,8 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/core.rkt` | deterministic payment-event projections |
 | `commerce/provider.rkt` | explicit server-side provider boundary |
 | `commerce/journal.rkt` | durable event-acceptance protocol |
-| `commerce/journal/sqlite.rkt` | SQLite raw-event journal backend |
+| `commerce/storage.rkt` | durable projection and outbox protocol |
+| `commerce/storage/sqlite.rkt` | SQLite journal/projection/outbox backend |
 | `commerce/pancake.rkt` | Pancake webhook authentication and active order proof |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |

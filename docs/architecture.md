@@ -78,8 +78,9 @@ provider-required active order verification may advance commercial state.
 
 Webhook acknowledgement means the raw event was durably accepted or an exact
 retry was recognized. It does not wait for credential signing or email/claim
-delivery. Projection and outbox insertion occur in one database transaction.
-Issuance workers consume the outbox idempotently.
+delivery. A projector later consumes unprojected journal sequences in order;
+its order update, issuance-outbox insertion, and durable processing marker occur
+in one database transaction. Issuance workers consume the outbox idempotently.
 
 ## Process and module boundaries
 
@@ -90,13 +91,13 @@ commerce                 pure public facade
 commerce/core            deterministic model and transitions
 commerce/provider        explicit server-side adapter contract
 commerce/journal         durable acceptance protocol
-commerce/journal/sqlite  SQLite raw-event journal backend
+commerce/storage         durable projection and outbox protocol
+commerce/storage/sqlite  SQLite journal/projection/outbox backend
 commerce/pancake         Pancake webhook authentication boundary
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
 commerce/server          HTTP edge and lifecycle
-commerce/storage         projection/outbox transaction
 commerce/zpay            ZPAY protocol adapter
 commerce/permit          Permit issuer and claim delivery
 commerce/operator        inspect/replay/reissue CLI
@@ -124,6 +125,8 @@ data remains provider-owned.
 - Same order, changed offer/subject/amount: quarantine and alert.
 - Unknown offer mapping: retain authenticated event, block projection, expose
   operator action.
+- Order identity conflict: preserve the previous projection, create no outbox
+  work, and durably mark the journal sequence blocked.
 - Issuer unavailable: retain outbox work and retry; payment state is not lost.
 - Delivery unavailable: retain signed credential and retry claim notification.
 

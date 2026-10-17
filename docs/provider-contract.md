@@ -54,10 +54,11 @@ The initial durable boundary is explicit:
 
 ```racket
 (require commerce/journal
-         commerce/journal/sqlite)
+         commerce/storage
+         commerce/storage/sqlite)
 
-(define journal (open-sqlite-event-journal database-path))
-(journal-accept! journal raw-request canonical-event
+(define storage (open-sqlite-commerce-storage database-path))
+(journal-accept! storage raw-request canonical-event
                  #:received-at receive-time)
 ```
 
@@ -65,6 +66,10 @@ The initial durable boundary is explicit:
 `accepted` only after the SQLite transaction commits, returns `replayed` for an
 exact retry, and raises `event-conflict` for changed raw or canonical content.
 Only `accepted` and `replayed` are acknowledgement outcomes.
+
+Projection is deliberately after acknowledgement. A projector repeatedly calls
+`storage-project-next!`; each successful transaction persists the current order,
+any newly emitted issuance work, and the journal-sequence marker together.
 
 ## Reconciliation
 

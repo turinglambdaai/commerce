@@ -32,7 +32,8 @@ raco pkg install --auto --no-docs --name commerce .
 
 ```racket
 (require commerce/journal
-         commerce/journal/sqlite)
+         commerce/storage
+         commerce/storage/sqlite)
 ```
 
 Pancake 边缘模块在显式环境中认证原始请求字节：
@@ -72,6 +73,24 @@ Pancake 边缘模块在显式环境中认证原始请求字节：
 币种和精确金额必须全部一致。私钥只由部署注入，绝不提交。外部引用在服务端存储
 中解析到 Offer 与稳定主体；它不是邮箱、主体 id 或客户端提供的声明。
 
+持久接收与投影刻意分成两个操作：
+
+```racket
+(define storage (open-sqlite-commerce-storage database-path))
+
+;; 这个 commit 成功后即可向渠道确认。
+(journal-accept! storage raw-body canonical-event
+                 #:received-at receive-time)
+
+;; 在 Webhook 请求之外运行；#f 表示没有待处理序列。
+(let project-pending ()
+  (when (storage-project-next! storage #:processed-at (current-seconds))
+    (project-pending)))
+```
+
+每次 projector 调用把订单、新产生的签发工作与来源序列标记一起提交。outbox 行
+仍保持 `pending`；当前版本不会调用 Permit 或交付 credential。
+
 ## 3. 跑通第一笔购买
 
 ```bash
@@ -100,6 +119,7 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
 - 实际写出的数据库行是什么，普通 SQL 能否篡改它？
 - Pancake 到底签了哪些原始字节，过期、跨环境或有歧义的已签请求如何关闭失败？
 - 商户查单请求具体签了什么，主动订单中任一字段被替换时为何无法产生规范事件？
+- 哪些数据库行能证明订单投影与签发工作一起提交，注入崩溃后又会留下什么？
 
 ## 5. 理解边界
 
@@ -118,12 +138,13 @@ raco test commerce-test/core-test.rkt commerce-test/journal-test.rkt \
 
 ```bash
 raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt \
-  commerce/journal/sqlite.rkt commerce/pancake.rkt \
+  commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt \
   commerce-doc/scribblings/commerce.scrbl
 raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-首个真实渠道是 Pancake。签名协议一致性与一次性订单主动查验已经实现；持久
-处理与真实 sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
+首个真实渠道是 Pancake。签名协议一致性、一次性订单主动查验以及 journal /
+投影 / outbox 持久处理已经实现；Permit policy/签发与真实 sandbox 证据仍是
+[ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
 
