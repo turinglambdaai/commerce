@@ -7,6 +7,7 @@
          commerce/provider
          commerce/storage
          commerce/storage/sqlite
+         commerce/private/time
          db
          file/sha1
          json
@@ -83,18 +84,10 @@
    #:trust-store trust-store
    #:clock (lambda () (values clock-epoch "2026-10-21T00:00:00Z"))))
 
-(define (rfc3339-for epoch-seconds)
-  (define moment (seconds->date epoch-seconds #t))
-  (define (pad2 value)
-    (if (< value 10) (string-append "0" (number->string value))
-        (number->string value)))
-  (string-append
-   (number->string (date-year moment))
-   "-" (pad2 (date-month moment))
-   "-" (pad2 (date-day moment))
-   "T" (pad2 (date-hour moment))
-   ":" (pad2 (date-minute moment))
-   ":" (pad2 (date-second moment)) "Z"))
+;; Assert against the production UTC spelling, not a test-local copy: a
+;; local copy agreed with the old host-local conversion on any machine
+;; and hid the UTC+8 offset entirely.
+(define rfc3339-for epoch-seconds->rfc3339)
 
 (define (count-revisions path)
   (define connection (sqlite3-connect #:database path #:mode 'read-only))

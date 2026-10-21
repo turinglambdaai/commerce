@@ -411,3 +411,122 @@
    (permit-entitlement-policy-id
     (permit-policy-for-offer subscription-catalog "taskly-pro-monthly"))
    "taskly-pro-v1"))
+
+;; ---- duration-derived updates windows (gptp-studio exemplar) -----------
+;; 1792108800 is 2026-10-16T00:00:00Z; 365 days later is 2027-10-16.
+
+(define gptp-policy
+  (make-permit-entitlement-policy
+   "gptp-studio-pro-v1" 1
+   #:subject-type 'person
+   #:grants
+   (list (make-permit-grant-policy
+          #:products '("gptp-studio") #:edition "pro"))
+   #:constraints
+   (make-permit-constraints-policy
+    #:updates-through-duration-days 365)))
+
+(define gptp-catalog
+  (make-permit-policy-catalog
+   (list (offer "gptp-studio-pro-perpetual" "gptp-studio" 'one-time
+                (money "CNY" 39900) "gptp-studio-pro-v1"))
+   (list gptp-policy)))
+
+(test-case "a duration policy derives the updates window from paid evidence"
+  (define request
+    (prepare-permit-snapshot
+     gptp-catalog
+     (intent 'grant #:offer-id "gptp-studio-pro-perpetual")
+     #:issuer "com.turinglambdaai.gptp-studio"
+     #:credential-id "cred-gptp-001-r0"
+     #:entitlement-id "ent-gptp-001"
+     #:issued-at "2026-10-16T00:05:00Z"
+     #:paid-at 1792108800))
+  (check-equal?
+   (hash-ref (hash-ref (permit-snapshot-request-payload request)
+                       'constraints)
+             'updates_through)
+   "2027-10-16T00:00:00Z")
+  ;; Derivation is deterministic: a replayed order converges on the same
+  ;; window bytes, like every other lineage input.
+  (check-equal?
+   request
+   (prepare-permit-snapshot
+    gptp-catalog
+    (intent 'grant #:offer-id "gptp-studio-pro-perpetual")
+    #:issuer "com.turinglambdaai.gptp-studio"
+    #:credential-id "cred-gptp-001-r0"
+    #:entitlement-id "ent-gptp-001"
+    #:issued-at "2026-10-16T00:05:00Z"
+    #:paid-at 1792108800)))
+
+(test-case "a duration policy without paid evidence refuses before signing"
+  (failure-code
+   'order-paid-evidence-required
+   (lambda ()
+     (prepare-permit-snapshot
+      gptp-catalog
+      (intent 'grant #:offer-id "gptp-studio-pro-perpetual")
+      #:issuer "com.turinglambdaai.gptp-studio"
+      #:credential-id "cred-gptp-001-r0"
+      #:entitlement-id "ent-gptp-001"
+      #:issued-at "2026-10-16T00:05:00Z"))))
+
+(test-case "a policy states the updates window exactly one way"
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (make-permit-constraints-policy
+                #:updates-through "2027-12-31T23:59:59Z"
+                #:updates-through-duration-days 365)))
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (make-permit-constraints-policy
+                #:updates-through-duration-days 0)))
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (make-permit-constraints-policy
+                #:updates-through-duration-days -30)))
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (make-permit-constraints-policy
+                #:updates-through-duration-days 365.5))))
+
+(test-case "paid-at is validated before any policy work"
+  (check-exn exn:fail:contract?
+             (lambda ()
+               (prepare-permit-snapshot
+                gptp-catalog
+                (intent 'grant #:offer-id "gptp-studio-pro-perpetual")
+                #:issuer "com.turinglambdaai.gptp-studio"
+                #:credential-id "cred-gptp-001-r0"
+                #:entitlement-id "ent-gptp-001"
+                #:issued-at "2026-10-16T00:05:00Z"
+                #:paid-at "2026-10-16"))))
+
+(test-case "a withdrawal successor inherits the derived window"
+  (define grant-request
+    (prepare-permit-snapshot
+     gptp-catalog
+     (intent 'grant #:offer-id "gptp-studio-pro-perpetual")
+     #:issuer "com.turinglambdaai.gptp-studio"
+     #:credential-id "cred-gptp-001-r0"
+     #:entitlement-id "ent-gptp-001"
+     #:issued-at "2026-10-16T00:05:00Z"
+     #:paid-at 1792108800))
+  (define previous (permit-snapshot-request-payload grant-request))
+  (define withdrawal
+    (prepare-permit-snapshot
+     gptp-catalog
+     (intent 'withdraw #:offer-id "gptp-studio-pro-perpetual")
+     #:issuer "com.turinglambdaai.gptp-studio"
+     #:credential-id "cred-gptp-001-r1"
+     #:entitlement-id "ent-gptp-001"
+     #:issued-at "2026-11-01T00:00:00Z"
+     #:previous previous))
+  (define constraints
+    (hash-ref (permit-snapshot-request-payload withdrawal) 'constraints))
+  (check-equal? (hash-ref constraints 'use_expires_at)
+                "2026-11-01T00:00:00Z")
+  ;; The sold-with window survives the withdrawal: only the use window ends.
+  (check-equal? (hash-ref constraints 'updates_through)
+                "2027-10-16T00:00:00Z"))

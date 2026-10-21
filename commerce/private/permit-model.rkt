@@ -17,7 +17,11 @@
 (struct permit-constraints-policy
   (use-expires-at updates-through features-through version-min version-max
                   named-seats device-activations concurrent-seats
-                  installation-id activation-required?)
+                  installation-id activation-required?
+                  ;; Commerce-side policy meaning, never a Permit payload
+                  ;; field: when set, issuance derives the concrete
+                  ;; updates_through from the order's paid evidence.
+                  updates-through-duration-days)
   #:transparent)
 
 (struct permit-entitlement-policy
