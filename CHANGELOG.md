@@ -6,6 +6,13 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add the runnable end-to-end journey (`examples/full-journey.rkt`) over
+  the real protocol boundaries — authenticated Pancake webhook, actively
+  verified one-time order, durable journal/projection, deterministic
+  Ed25519 issuance, one-time claim fulfillment, refund withdrawal, and the
+  operator explanation — plus the operator runbook
+  (`docs/runbook.md`) covering paid-but-inactive, replay/redrive, refund
+  reality, claim states, and the live sandbox drill.
 - Add the `commerce/operator` replay surface: redacted order explanations
   (projection, canonical event snapshots, outbox work, issued-credential
   evidence), status-filtered outbox enumeration, and bounded redrive that

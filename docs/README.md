@@ -29,6 +29,8 @@ operations. Do not duplicate a rule across several guides.
   personal data, and failure behavior.
 - [Operations](operations.md) — replay, stuck work, refunds, reconciliation,
   backup/restore, and observability requirements.
+- [Runbook](runbook.md) — the operator's question-by-question answers with
+  the runnable end-to-end journey.
 - [Roadmap](../ROADMAP.md) — bounded implementation milestones.
 
 ## Decisions

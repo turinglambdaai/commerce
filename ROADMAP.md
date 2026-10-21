@@ -3,12 +3,10 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The final M1 handoff is sandbox end-to-end evidence: one runnable flow
-that drives a verified payment through projection, deterministic issuance,
-and claim fulfillment against the real Pancake test environment with
-captured fixtures, plus the operator runbook for replay, redrive, and
-refund questions. Do not add production credentials, an HTTP listener, or
-subscription policy in the same change.
+M1 is complete: the next handoff opens M2's operational baseline, starting
+with structured redacted logs and correlation ids, then health/readiness
+inspection and the operator CLI wrapper. Take one bounded slice at a time
+and keep the honest-gap lists in both READMEs current.
 
 ## M0 — Architecture foundation
 
@@ -30,7 +28,7 @@ subscription policy in the same change.
 - [x] Offer-to-Permit policy mapping
 - [x] Permit credential issuance and one-time claim delivery
 - [x] Refund and operator replay flow
-- [ ] Sandbox end-to-end evidence and runbook
+- [x] Sandbox end-to-end evidence and runbook
 
 ## M2 — Operational baseline
 

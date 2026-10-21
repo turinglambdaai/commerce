@@ -2,7 +2,7 @@
 
 **One commercial truth for every product — payment events in, signed product rights out.**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M1%20Pancake-C15F3C)
+[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M2%20Ops-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -185,12 +185,16 @@ Implemented now:
   outbox enumeration, and bounded redrive that reuses the immutable
   journal without ever editing a projection row or rewinding finished
   work;
+- one runnable end-to-end journey over the real protocol boundaries
+  (`examples/full-journey.rkt`) and the operator runbook
+  ([docs/runbook.md](docs/runbook.md));
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - webhook HTTP endpoints and delivery transports (email, portal);
-- the operator CLI wrapper over the operator surface;
+- the operator CLI wrapper, delivery transports (email, portal), and
+  live sandbox credentials (the runbook documents the drill);
 - ZPAY or app-store adapters;
 - refund/operator replay tooling beyond the durable lease primitives,
   subscriptions, seats, credential-claim portal, or an operator UI;
