@@ -86,10 +86,13 @@ issuer, entitlement id, subject type/id, entitlement credential type, and grant
 set against the pinned Offer policy before advancing the revision.
 
 SQLite schema v3 reserves append-only lineage roots and contiguous revision
-evidence, including the exact unsigned payload bytes and pinned policy version.
-The storage writer is not implemented yet. This module itself does not claim
-outbox work, allocate ids, persist lineage, load a key, call
-`issue-credential`, or deliver a claim.
+evidence, including the exact unsigned payload bytes and pinned policy
+version. `storage-complete-issuance-work!` is the only writer: it appends
+the lineage root plus revision zero, or exactly one successor, inside the
+same short transaction that completes the claimed issuance-outbox row, and
+reconciles an already-recorded completion to the same revision. This module
+itself does not claim outbox work, allocate ids, persist lineage, load a
+key, call `issue-credential`, or deliver a claim.
 
 ## Trust domains
 

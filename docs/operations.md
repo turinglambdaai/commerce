@@ -89,18 +89,21 @@ Every retry is bounded and observable. The current projector records
 deterministic poison work as a durable `blocked` marker with a typed reason;
 the operator replay command and broader quarantine workflow remain future work.
 
-Issuance rows are currently inserted only as `pending`; Permit worker mutations
-are not implemented yet. The fixed workflow contract is: claim in a short
-transaction, set `processing`, increment `attempts`, and store an opaque owner
-and expiry; active leases are exclusive and expired leases are reclaimable.
-Signing occurs outside that claim transaction, followed by owner-checked
-completion. No worker may infer authorization merely from outbox status.
+Issuance rows are claimed through the storage lease contract: claim in a
+short transaction, set `processing`, increment `attempts`, and store an
+opaque owner and expiry; active leases are exclusive and expired leases are
+reclaimable. Signing occurs outside that claim transaction, followed by
+owner-checked completion. Release returns transient work to `pending` with a
+typed error code and a future retry time; completion that already landed
+reconciles to the recorded revision. No worker may infer authorization
+merely from outbox status.
 
-Lineage and revision tables exist as an append-only schema foundation, but no
-public writer is implemented yet. Revision rows retain exact unsigned Permit
-payload bytes and their digest. Routine inspection omits those bytes, and they
-must not be confused with signed credential bytes, which schema v3 does not
-store.
+Lineage roots and revision rows are written only by
+`storage-complete-issuance-work!`, which appends the root plus revision zero
+or exactly one successor in the same transaction that completes the outbox
+row. Revision rows retain exact unsigned Permit payload bytes and their
+digest. Routine inspection omits those bytes, and they must not be confused
+with signed credential bytes, which schema v3 does not store.
 
 Pancake active reads make one transport attempt with a five-second connect
 limit and separate ten-second limits for receiving response headers and the

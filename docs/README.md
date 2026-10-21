@@ -41,6 +41,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0006: SQLite order projection and issuance outbox](decisions/0006-sqlite-projection-and-issuance-outbox.md)
 - [ADR-0007: Versioned Offer-to-Permit policy mapping](decisions/0007-offer-to-permit-policy-mapping.md)
 - [ADR-0008: SQLite entitlement lineage v3](decisions/0008-sqlite-entitlement-lineage-v3.md)
+- [ADR-0009: Issuance outbox lease state machine and transactional lineage writer](decisions/0009-issuance-lease-and-lineage-writer.md)
 
 ## Source entry points
 

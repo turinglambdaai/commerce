@@ -24,8 +24,9 @@ The current release provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
 event journal, exact-byte Pancake webhook authentication, active Pancake
 one-time-order verification, transactional durable projection/outbox storage,
-version-pinned Offer-to-Permit snapshot mapping, tests, and one runnable
-purchase walkthrough.
+version-pinned Offer-to-Permit snapshot mapping, an owner-safe issuance-outbox
+lease state machine with the transactional entitlement-lineage writer, tests,
+and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -160,21 +161,26 @@ Implemented now:
 - an explicit `commerce/permit` adapter that validates version-pinned Offer
   policy through Permit and prepares complete revision-0 grants or withdrawal
   successors that expire at issuance, plus their exact serialized bytes;
+- an owner-safe issuance-outbox lease state machine — exclusive claims with
+  observable attempts, expired-lease reclaim, owner-checked completion, and
+  typed release — whose completion appends the lineage root plus revision
+  zero, or exactly one successor, together with outbox completion in one
+  transaction, reconciling repeated completion to the recorded revision;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - webhook HTTP endpoints;
+- the Permit issuer worker (snapshot signing), claim delivery;
 - ZPAY or app-store adapters;
-- the lineage writer and outbox lease worker, Permit signing, and credential
-  delivery;
-- subscriptions, seats, credential-claim portal, or an operator UI;
+- refund/operator replay tooling beyond the durable lease primitives,
+  subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is the transactional lineage writer plus an owner-safe
-outbox lease state machine, as described in [ROADMAP.md](ROADMAP.md). Honest
-gaps remain visible so architecture does not get mistaken for production
-readiness.
+The next bounded slice is the explicit issuer worker that signs prepared
+snapshots with `permit/issuer` and reconciles ambiguous crashes, as described
+in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so architecture does
+not get mistaken for production readiness.
 
 ## Development
 

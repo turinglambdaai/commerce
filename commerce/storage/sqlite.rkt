@@ -3,6 +3,7 @@
 (provide open-sqlite-commerce-storage)
 
 (require db
+         file/sha1
          racket/match
          "../private/journal-model.rkt"
          "../private/model.rkt"
@@ -54,6 +55,55 @@ SELECT id, idempotency_key, source_journal_sequence, action, provider,
        created_at, updated_at, completed_at
 FROM commerce_issuance_outbox
 WHERE idempotency_key = ?
+SQL
+  )
+
+(define select-lineage-sql
+  #<<SQL
+SELECT entitlement_id, issuer, subject_type, subject_id, offer_id, created_at
+FROM commerce_entitlement_lineage
+WHERE entitlement_id = ?
+SQL
+  )
+
+(define select-lineage-identity-sql
+  #<<SQL
+SELECT entitlement_id, created_at
+FROM commerce_entitlement_lineage
+WHERE issuer = ? AND subject_type = ? AND subject_id = ?
+  AND credential_type = 'entitlement' AND offer_id = ?
+SQL
+  )
+
+(define revision-columns-sql
+  "entitlement_id, revision, previous_revision, credential_id,
+   issuance_outbox_id, action, policy_id, policy_version, payload_bytes,
+   payload_digest, issued_at, recorded_at")
+
+(define select-revision-sql
+  (string-append
+   "SELECT " revision-columns-sql
+   " FROM commerce_entitlement_revision WHERE entitlement_id = ? AND revision = ?"))
+
+(define select-latest-revision-sql
+  (string-append
+   "SELECT " revision-columns-sql
+   " FROM commerce_entitlement_revision WHERE entitlement_id = ?"
+   " ORDER BY revision DESC LIMIT 1"))
+
+(define select-revision-by-outbox-sql
+  (string-append
+   "SELECT " revision-columns-sql
+   " FROM commerce_entitlement_revision WHERE issuance_outbox_id = ?"))
+
+(define select-due-work-sql
+  #<<SQL
+SELECT id, idempotency_key
+FROM commerce_issuance_outbox
+WHERE (status = 'pending' AND available_at <= ?)
+   OR (status = 'processing' AND lease_expires_at <= ?)
+ORDER BY id
+LIMIT 1
 SQL
   )
 
@@ -114,6 +164,29 @@ SQL
                (string->symbol last-error-code))
           created-at updated-at (nullable completed-at)))))
 
+(define (row->lineage row)
+  (and row
+       (match-let ([(vector entitlement-id issuer subject-type subject-id
+                            offer-id created-at)
+                    row])
+         (entitlement-lineage
+          entitlement-id issuer subject-type subject-id offer-id
+          created-at))))
+
+(define (row->revision row)
+  (and row
+       (match-let ([(vector entitlement-id revision previous-revision
+                            credential-id issuance-outbox-id action policy-id
+                            policy-version payload-bytes payload-digest
+                            issued-at recorded-at)
+                    row])
+         (entitlement-revision
+          entitlement-id revision (nullable previous-revision)
+          credential-id issuance-outbox-id (string->symbol action)
+          policy-id policy-version
+          (bytes->immutable-bytes payload-bytes) payload-digest
+          issued-at recorded-at))))
+
 (define (lookup-record connection provider event-id)
   (define row
     (query-maybe-row connection select-record-sql provider event-id))
@@ -126,6 +199,14 @@ SQL
 (define (lookup-outbox connection idempotency-key)
   (row->outbox
    (query-maybe-row connection select-outbox-sql idempotency-key)))
+
+(define (lookup-lineage connection entitlement-id)
+  (row->lineage
+   (query-maybe-row connection select-lineage-sql entitlement-id)))
+
+(define (lookup-revision connection entitlement-id revision)
+  (row->revision
+   (query-maybe-row connection select-revision-sql entitlement-id revision)))
 
 (define (record-content=? record payload event)
   (and (equal? (journal-record-payload record) payload)
@@ -593,10 +674,255 @@ SQL
     (check-open)
     (lookup-outbox connection idempotency-key))
 
+  ;; The claim transaction is the ownership boundary: one immediate
+  ;; transaction selects the lowest due row and binds an exclusive lease to
+  ;; the owner. Expired leases are reclaimable by anyone, including the
+  ;; previous owner, and every reclaim is visible through attempts.
+  (define (claim-work owner lease-seconds now)
+    (check-sqlite-integer 'lease-seconds lease-seconds)
+    (check-sqlite-integer 'lease-expires-at (+ now lease-seconds))
+    (check-sqlite-integer 'now now)
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define due
+         (query-maybe-row connection select-due-work-sql now now))
+       (and due
+            (match-let ([(vector id idempotency-key) due])
+              (query-exec
+               connection
+               #<<SQL
+UPDATE commerce_issuance_outbox
+SET status = 'processing', attempts = attempts + 1,
+    lease_owner = ?, lease_expires_at = ?, updated_at = ?
+WHERE id = ?
+  AND ((status = 'pending' AND available_at <= ?) OR
+       (status = 'processing' AND lease_expires_at <= ?))
+SQL
+               owner (+ now lease-seconds) now id now now)
+              (lookup-outbox connection idempotency-key))))
+     #:option 'immediate))
+
+  ;; Completion appends the lineage root with revision zero, or exactly one
+  ;; successor, and finishes the outbox row inside the same short transaction.
+  ;; The caller must still hold the lease it claimed. Repeating a completion
+  ;; that already landed reconciles to the recorded revision instead of
+  ;; writing a second one.
+  (define (complete-work item issuer subject-type entitlement-id credential-id
+                         policy-id policy-version payload-bytes issued-at
+                         recorded-at)
+    (check-sqlite-integer 'policy-version policy-version)
+    (check-sqlite-integer 'recorded-at recorded-at)
+    (define owner (issuance-outbox-item-lease-owner item))
+    (define key (issuance-outbox-item-idempotency-key item))
+    (define immutable-payload (bytes->immutable-bytes payload-bytes))
+    (define actual-digest
+      (bytes->hex-string (sha256-bytes immutable-payload)))
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          #<<SQL
+SELECT id, action, offer_id, subject_id, status, lease_owner, lease_expires_at
+FROM commerce_issuance_outbox
+WHERE idempotency_key = ?
+SQL
+          key))
+       (unless row
+         (raise-commerce
+          'unknown-issuance-work
+          "issuance completion references unknown outbox work"
+          (hash 'idempotency-key key)))
+       (match-define
+         (vector id action offer-id subject-id status lease-owner-row
+                 lease-expires-at-row)
+         row)
+       (define recorded-revision
+         (row->revision
+          (query-maybe-row connection select-revision-by-outbox-sql id)))
+       (cond
+         [(string=? status "completed")
+          (if (and recorded-revision
+                   (string=? (entitlement-revision-payload-digest
+                              recorded-revision)
+                             actual-digest))
+              (issuance-completion (lookup-outbox connection key)
+                                   recorded-revision)
+              (raise-commerce
+               'entitlement-lineage-conflict
+               "completed issuance work cannot record a different payload"
+               (hash 'idempotency-key key 'outbox-id id)))]
+         [else
+          (unless (and owner
+                       (string=? status "processing")
+                       (equal? lease-owner-row owner)
+                       lease-expires-at-row
+                       (> lease-expires-at-row recorded-at))
+            (raise-commerce
+             'lease-not-held
+             "issuance completion requires the active claim lease"
+             (hash 'idempotency-key key 'outbox-id id)))
+          (define action-symbol (string->symbol action))
+          (define identity
+            (query-maybe-row connection select-lineage-identity-sql
+                             issuer subject-type subject-id offer-id))
+          (define-values (next-revision previous-revision create-lineage?)
+            (cond
+              [identity
+               (match-define (vector existing-id _) identity)
+               (unless (string=? existing-id entitlement-id)
+                 (raise-commerce
+                  'entitlement-lineage-conflict
+                  "the commercial identity is already bound to another entitlement"
+                  (hash 'idempotency-key key
+                        'offer-id offer-id
+                        'subject-id subject-id
+                        'lineage-entitlement-id existing-id
+                        'requested-entitlement-id entitlement-id)))
+               (when (eq? action-symbol 'grant)
+                 (raise-commerce
+                  'entitlement-lineage-conflict
+                  "initial one-time grant cannot replace an existing lineage"
+                  (hash 'idempotency-key key 'entitlement-id entitlement-id)))
+               (define latest
+                 (row->revision
+                  (query-maybe-row connection select-latest-revision-sql
+                                   entitlement-id)))
+               (unless latest
+                 (raise-commerce
+                  'entitlement-lineage-conflict
+                  "entitlement lineage has no recorded revision"
+                  (hash 'entitlement-id entitlement-id)))
+               (values (add1 (entitlement-revision-revision latest))
+                       (entitlement-revision-revision latest)
+                       #f)]
+              [(eq? action-symbol 'grant)
+               (values 0 #f #t)]
+              [else
+               (raise-commerce
+                'entitlement-lineage-required
+                "withdrawal requires an existing entitlement lineage"
+                (hash 'idempotency-key key
+                      'offer-id offer-id
+                      'subject-id subject-id))]))
+          (when (= (query-value
+                    connection
+                    "SELECT EXISTS(SELECT 1 FROM commerce_entitlement_revision
+WHERE credential_id = ?)"
+                    credential-id)
+                   1)
+            (raise-commerce
+             'entitlement-lineage-conflict
+             "credential id is already bound to another entitlement revision"
+             (hash 'idempotency-key key 'credential-id credential-id)))
+          (when create-lineage?
+            (query-exec
+             connection
+             #<<SQL
+INSERT INTO commerce_entitlement_lineage
+  (entitlement_id, issuer, subject_type, subject_id, credential_type,
+   offer_id, created_at)
+VALUES (?, ?, ?, ?, 'entitlement', ?, ?)
+SQL
+             entitlement-id issuer subject-type subject-id offer-id
+             recorded-at))
+          (query-exec
+           connection
+           #<<SQL
+INSERT INTO commerce_entitlement_revision
+  (entitlement_id, revision, previous_revision, credential_id,
+   issuance_outbox_id, action, policy_id, policy_version, payload_bytes,
+   payload_digest, issued_at, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+           entitlement-id next-revision (sql-nullable previous-revision)
+           credential-id id action policy-id policy-version immutable-payload
+           actual-digest issued-at recorded-at)
+          (query-exec
+           connection
+           #<<SQL
+UPDATE commerce_issuance_outbox
+SET status = 'completed', lease_owner = NULL, lease_expires_at = NULL,
+    completed_at = ?, updated_at = ?
+WHERE id = ?
+SQL
+           recorded-at recorded-at id)
+          (issuance-completion
+           (lookup-outbox connection key)
+           (lookup-revision connection entitlement-id next-revision))]))
+     #:option 'immediate))
+
+  ;; A transient failure releases the claimed row for bounded retry without
+  ;; touching attempts, which the claim already incremented. Only the lease
+  ;; owner may release, and completed work can never be released.
+  (define (release-work item error-code retry-at)
+    (check-sqlite-integer 'retry-at retry-at)
+    (define owner (issuance-outbox-item-lease-owner item))
+    (define key (issuance-outbox-item-idempotency-key item))
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          "SELECT id, status, lease_owner FROM commerce_issuance_outbox WHERE idempotency_key = ?"
+          key))
+       (unless row
+         (raise-commerce
+          'unknown-issuance-work
+          "issuance release references unknown outbox work"
+          (hash 'idempotency-key key)))
+       (match-define (vector id status lease-owner-row) row)
+       (unless (and owner
+                    (string=? status "processing")
+                    (equal? lease-owner-row owner))
+         (raise-commerce
+          'lease-not-held
+          "issuance release requires the active claim lease"
+          (hash 'idempotency-key key 'outbox-id id)))
+       (query-exec
+        connection
+        #<<SQL
+UPDATE commerce_issuance_outbox
+SET status = 'pending', available_at = ?, lease_owner = NULL,
+    lease_expires_at = NULL, last_error_code = ?, updated_at = ?
+WHERE id = ?
+SQL
+        retry-at (symbol->string error-code) retry-at id)
+       (lookup-outbox connection key))
+      #:option 'immediate))
+
+  (define (entitlement-ref entitlement-id)
+    (check-open)
+    (lookup-lineage connection entitlement-id))
+
+  (define (lineage-ref issuer subject-type subject-id offer-id)
+    (check-open)
+    (define identity
+      (query-maybe-row connection select-lineage-identity-sql
+                       issuer subject-type subject-id offer-id))
+    (and identity
+         (lookup-lineage connection (vector-ref identity 0))))
+
+  (define (revision-ref entitlement-id revision)
+    (check-open)
+    (check-sqlite-integer 'revision revision)
+    (lookup-revision connection entitlement-id revision))
+
+  (define (latest-revision entitlement-id)
+    (check-open)
+    (row->revision
+     (query-maybe-row connection select-latest-revision-sql entitlement-id)))
+
   (define (close)
     (unless (unbox closed?)
       (disconnect connection)
       (set-box! closed? #t)))
 
   (commerce-storage
-   accept lookup-journal project-next lookup-projection lookup-work close))
+   accept lookup-journal project-next lookup-projection lookup-work
+   claim-work complete-work release-work
+   entitlement-ref lineage-ref revision-ref latest-revision
+   close))

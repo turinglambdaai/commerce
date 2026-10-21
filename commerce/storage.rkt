@@ -27,17 +27,63 @@
  issuance-outbox-item-created-at
  issuance-outbox-item-updated-at
  issuance-outbox-item-completed-at
+ entitlement-lineage?
+ entitlement-lineage-entitlement-id
+ entitlement-lineage-issuer
+ entitlement-lineage-subject-type
+ entitlement-lineage-subject-id
+ entitlement-lineage-offer-id
+ entitlement-lineage-created-at
+ entitlement-revision?
+ entitlement-revision-entitlement-id
+ entitlement-revision-revision
+ entitlement-revision-previous-revision
+ entitlement-revision-credential-id
+ entitlement-revision-issuance-outbox-id
+ entitlement-revision-action
+ entitlement-revision-policy-id
+ entitlement-revision-policy-version
+ entitlement-revision-payload-bytes
+ entitlement-revision-payload-digest
+ entitlement-revision-issued-at
+ entitlement-revision-recorded-at
+ issuance-completion?
+ issuance-completion-outbox
+ issuance-completion-revision
  storage-project-next!
+ storage-claim-issuance-work!
+ storage-complete-issuance-work!
+ storage-release-issuance-work!
  storage-order-ref
  storage-outbox-ref
+ storage-entitlement-ref
+ storage-lineage-ref
+ storage-entitlement-revision-ref
+ storage-latest-entitlement-revision
  storage-close)
 
-(require "private/model.rkt"
+(require racket/list
+         "private/model.rkt"
          "private/storage-model.rkt")
 
 (define (check-storage who storage)
   (unless (commerce-storage? storage)
     (raise-argument-error who "commerce-storage?" storage)))
+
+(define (check-claimed-work who item)
+  (unless (issuance-outbox-item? item)
+    (raise-argument-error who "issuance-outbox-item?" item)))
+
+(define (check-timestamp who value)
+  (unless (exact-nonnegative-integer? value)
+    (raise-argument-error
+     who "exact-nonnegative-integer?" value)))
+
+(define (check-typed-code who value)
+  (unless (stable-id? (if (symbol? value) (symbol->string value) ""))
+    (raise-argument-error
+     who "stable kebab-case error symbol" value))
+  value)
 
 (define (storage-project-next! storage #:processed-at processed-at)
   (check-storage 'storage-project-next! storage)
@@ -64,6 +110,127 @@
      'storage-outbox-ref "non-empty idempotency key up to 512 characters"
      idempotency-key))
   ((commerce-storage-outbox-lookup storage) idempotency-key))
+
+;; Claims the lowest due outbox row for one owner. Active leases are
+;; exclusive; an expired lease may be reclaimed by any owner, and the
+;; reclaim is observable through the attempts counter.
+(define (storage-claim-issuance-work! storage
+                                      #:owner owner
+                                      #:lease-seconds lease-seconds
+                                      #:now now)
+  (check-storage 'storage-claim-issuance-work! storage)
+  (unless (opaque-id? owner)
+    (raise-argument-error
+     'storage-claim-issuance-work!
+     "non-empty opaque owner identifier up to 256 characters"
+     owner))
+  (unless (exact-positive-integer? lease-seconds)
+    (raise-argument-error
+     'storage-claim-issuance-work! "exact-positive-integer?" lease-seconds))
+  (check-timestamp 'storage-claim-issuance-work! now)
+  ((commerce-storage-issuance-claim storage) owner lease-seconds now))
+
+;; Appends the lineage root with revision zero, or exactly one successor,
+;; and completes the claimed work in one transaction. The claimed item
+;; carries the lease owner that completion re-checks against the database.
+(define (storage-complete-issuance-work! storage item
+                                         #:issuer issuer
+                                         #:subject-type subject-type
+                                         #:entitlement-id entitlement-id
+                                         #:credential-id credential-id
+                                         #:policy-id policy-id
+                                         #:policy-version policy-version
+                                         #:payload-bytes payload-bytes
+                                         #:issued-at issued-at
+                                         #:recorded-at recorded-at)
+  (check-storage 'storage-complete-issuance-work! storage)
+  (check-claimed-work 'storage-complete-issuance-work! item)
+  (for ([label/value
+        (in-list
+         (list (list "issuer" issuer)
+               (list "subject type" subject-type)
+               (list "entitlement id" entitlement-id)
+               (list "credential id" credential-id)
+               (list "policy id" policy-id)))]
+        #:unless (opaque-id? (second label/value)))
+    (raise-argument-error
+     'storage-complete-issuance-work!
+     (format "non-empty opaque ~a up to 256 characters" (first label/value))
+     (second label/value)))
+  (unless (exact-positive-integer? policy-version)
+    (raise-argument-error
+     'storage-complete-issuance-work!
+     "exact-positive-integer?" policy-version))
+  (unless (and (bytes? payload-bytes) (> (bytes-length payload-bytes) 0))
+    (raise-argument-error
+     'storage-complete-issuance-work!
+     "non-empty bytes?" payload-bytes))
+  (unless (and (string? issued-at) (<= 1 (string-length issued-at) 512))
+    (raise-argument-error
+     'storage-complete-issuance-work!
+     "non-empty Permit issued-at string up to 512 characters" issued-at))
+  (check-timestamp 'storage-complete-issuance-work! recorded-at)
+  ((commerce-storage-issuance-complete storage)
+   item issuer subject-type entitlement-id credential-id policy-id
+   policy-version (bytes->immutable-bytes payload-bytes) issued-at
+   recorded-at))
+
+;; Returns transient work to 'pending with a typed error and a future retry
+;; time. Only the lease owner may release, and the attempts counter is left
+;; exactly as the claim incremented it.
+(define (storage-release-issuance-work! storage item
+                                        #:error-code error-code
+                                        #:retry-at retry-at)
+  (check-storage 'storage-release-issuance-work! storage)
+  (check-claimed-work 'storage-release-issuance-work! item)
+  (check-typed-code 'storage-release-issuance-work! error-code)
+  (check-timestamp 'storage-release-issuance-work! retry-at)
+  ((commerce-storage-issuance-release storage) item error-code retry-at))
+
+(define (storage-entitlement-ref storage entitlement-id)
+  (check-storage 'storage-entitlement-ref storage)
+  (unless (opaque-id? entitlement-id)
+    (raise-argument-error
+     'storage-entitlement-ref
+     "non-empty opaque entitlement identifier" entitlement-id))
+  ((commerce-storage-entitlement-lookup storage) entitlement-id))
+
+(define (storage-lineage-ref storage
+                             #:issuer issuer
+                             #:subject-type subject-type
+                             #:subject-id subject-id
+                             #:offer-id offer-id)
+  (check-storage 'storage-lineage-ref storage)
+  (for ([label/value
+         (in-list
+          (list (list "issuer" issuer)
+                (list "subject type" subject-type)
+                (list "subject id" subject-id)
+                (list "offer id" offer-id)))]
+        #:unless (opaque-id? (second label/value)))
+    (raise-argument-error
+     'storage-lineage-ref
+     (format "non-empty opaque ~a up to 256 characters" (first label/value))
+     (second label/value)))
+  ((commerce-storage-lineage-lookup storage)
+   issuer subject-type subject-id offer-id))
+
+(define (storage-entitlement-revision-ref storage entitlement-id revision)
+  (check-storage 'storage-entitlement-revision-ref storage)
+  (unless (opaque-id? entitlement-id)
+    (raise-argument-error
+     'storage-entitlement-revision-ref
+     "non-empty opaque entitlement identifier" entitlement-id))
+  (check-timestamp 'storage-entitlement-revision-ref revision)
+  ((commerce-storage-revision-lookup storage) entitlement-id revision))
+
+(define (storage-latest-entitlement-revision storage entitlement-id)
+  (check-storage 'storage-latest-entitlement-revision storage)
+  (unless (opaque-id? entitlement-id)
+    (raise-argument-error
+     'storage-latest-entitlement-revision
+     "non-empty opaque entitlement identifier" entitlement-id))
+  ((commerce-storage-latest-revision-lookup storage) entitlement-id))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)

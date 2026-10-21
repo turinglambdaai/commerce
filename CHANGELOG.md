@@ -6,6 +6,16 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add an owner-safe issuance-outbox lease state machine: exclusive claim in
+  one immediate transaction with observable attempts, expired-lease reclaim,
+  owner-checked completion, and typed release with a bounded retry time.
+  Completion appends the lineage root plus revision zero, or exactly one
+  successor, in the same transaction that completes the outbox row, binds the
+  pinned policy id/version and deterministic lineage ids, computes the payload
+  digest server-side, and reconciles repeated completion to the recorded
+  revision. Lineage and revision readers expose durable audit state. No
+  signing, signed-credential persistence, delivery, or HTTP listener is
+  included.
 - Add SQLite schema v3 with immutable entitlement roots and contiguous Permit
   revision evidence. Fresh, v1, and v2 databases migrate atomically without
   rewriting journal/outbox evidence; no lease worker, signer, signed credential,

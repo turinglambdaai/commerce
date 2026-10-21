@@ -98,9 +98,10 @@ commerce/permit          Offer policy and Permit snapshot adapter
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
-commerce/server          HTTP edge and lifecycle
-commerce/zpay            ZPAY protocol adapter
-commerce/operator        inspect/replay/reissue CLI
+commerce/issuer         outbox worker: snapshot, sign, record, hand off
+commerce/server         HTTP edge and lifecycle
+commerce/zpay           ZPAY protocol adapter
+commerce/operator       inspect/replay/reissue CLI
 ```
 
 Physical extraction into separately versioned packages happens only when real

@@ -202,8 +202,8 @@ full commit synchronization, foreign keys, and database triggers that reject
 updates or deletes of accepted event and entitlement-lineage evidence. Schema
 v1 and v2 databases migrate in place without rewriting existing rows. The v3
 lineage tables retain stable entitlement roots and contiguous revisions with
-exact unsigned Permit payload bytes; no public lineage writer, lease mutation,
-signer, or signed-credential storage is exposed yet.
+exact unsigned Permit payload bytes; no signer or signed-credential storage is
+exposed.
 
 @verbatim{
 (journal-accept! storage raw-payload event #:received-at received-at)
@@ -261,9 +261,80 @@ leaves the previous order unchanged.
 new outbox items, and optional failure code. Each
 @tt{issuance-outbox-item} exposes its stable idempotency key, source sequence,
 rights action and commercial identifiers, occurrence time, and workflow state.
-New rows are @tt{'pending} with zero attempts and no lease. This release does
-not expose lease mutation or Permit signing APIs. Call @tt{storage-close}
-during service shutdown.
+New rows are @tt{'pending} with zero attempts and no lease. Call
+@tt{storage-close} during service shutdown.
+
+@subsection{Issuance lease state machine}
+
+The issuance worker protocol is owner-safe: a row is claimed, signed work
+happens outside the claim transaction, and completion or release re-checks
+the lease owner against the database.
+
+@verbatim{
+(storage-claim-issuance-work! storage
+ #:owner owner #:lease-seconds lease-seconds #:now now)
+  -> (or/c issuance-outbox-item? #f)
+}
+
+Claims the lowest due outbox row in one immediate transaction: status
+@tt{'processing}, attempts incremented by one, and an opaque exclusive lease
+bound to the owner. A row is due when it is @tt{'pending} and
+@tt{available_at <= now}, or when its lease has expired. Returns @tt{#f}
+when nothing is due.
+
+@verbatim{
+(storage-complete-issuance-work! storage item
+ #:issuer issuer #:subject-type subject-type
+ #:entitlement-id entitlement-id #:credential-id credential-id
+ #:policy-id policy-id #:policy-version policy-version
+ #:payload-bytes payload-bytes #:issued-at issued-at
+ #:recorded-at recorded-at)
+  -> issuance-completion?
+}
+
+Appends the lineage root together with revision zero, or exactly one
+successor revision, and completes the outbox row inside the same short
+transaction. The writer enforces the ADR-0008 identity rules as typed
+failures before any insert: a second grant over an existing lineage, a
+commercial identity bound to a different entitlement, a withdrawal without
+a lineage, and a credential id already bound to another revision raise
+@tt{exn:fail:commerce} codes @tt{'entitlement-lineage-conflict} or
+@tt{'entitlement-lineage-required} and write nothing. The payload digest is
+computed from the given bytes, never trusted from the caller. Completion
+without the active lease raises @tt{'lease-not-held}. Repeating a completion
+that already landed reconciles to the recorded revision; the same outbox id
+with different payload bytes is a conflict.
+
+@verbatim{
+(storage-release-issuance-work! storage item
+ #:error-code error-code #:retry-at retry-at)
+  -> issuance-outbox-item?
+}
+
+Returns transient work to @tt{'pending} with the typed error code recorded
+and a future retry time. Only the lease owner may release; attempts stay
+exactly as the claim incremented them.
+
+@verbatim{
+(storage-entitlement-ref storage entitlement-id)
+  -> (or/c entitlement-lineage? #f)
+
+(storage-lineage-ref storage #:issuer issuer #:subject-type subject-type
+ #:subject-id subject-id #:offer-id offer-id)
+  -> (or/c entitlement-lineage? #f)
+
+(storage-entitlement-revision-ref storage entitlement-id revision)
+  -> (or/c entitlement-revision? #f)
+
+(storage-latest-entitlement-revision storage entitlement-id)
+  -> (or/c entitlement-revision? #f)
+}
+
+Readers expose durable lineage and revision state for worker snapshot
+preparation, crash reconciliation, and audit. Revision payload bytes are the
+exact unsigned snapshot bytes, never signed credential bytes. No Permit
+signing, signed-credential persistence, claim delivery, or HTTP listener is
+included in this boundary.
 
 @section{Offer-to-Permit policy mapping}
 
