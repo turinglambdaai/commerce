@@ -25,8 +25,9 @@ order projections, rights intents, a provider boundary, a durable SQLite raw
 event journal, exact-byte Pancake webhook authentication, active Pancake
 one-time-order verification, transactional durable projection/outbox storage,
 version-pinned Offer-to-Permit snapshot mapping, an owner-safe issuance-outbox
-lease state machine with the transactional entitlement-lineage writer, tests,
-and one runnable purchase walkthrough.
+lease state machine with the transactional entitlement-lineage writer, the
+explicit Permit issuer worker that signs recorded bytes and reconciles
+ambiguous crashes, tests, and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -131,6 +132,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/storage/sqlite) ; SQLite service-storage backend
 (require commerce/pancake)   ; Pancake authentication and active order proof
 (require commerce/permit)    ; reviewed Offer policy to Permit snapshots
+(require commerce/issuer)    ; explicit issuer worker: claim, sign, record
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -166,21 +168,26 @@ Implemented now:
   typed release — whose completion appends the lineage root plus revision
   zero, or exactly one successor, together with outbox completion in one
   transaction, reconciling repeated completion to the recorded revision;
+- the explicit `commerce/issuer` worker: deterministic lineage and
+  credential ids, snapshot preparation, deterministic Ed25519 signing of the
+  exact recorded bytes outside the claim transaction, typed refusal of
+  deterministic dead ends before signing, bounded transient backoff, and
+  crash reconciliation — with no signed bytes persisted yet;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - webhook HTTP endpoints;
-- the Permit issuer worker (snapshot signing), claim delivery;
+- credential delivery and claim records;
 - ZPAY or app-store adapters;
 - refund/operator replay tooling beyond the durable lease primitives,
   subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is the explicit issuer worker that signs prepared
-snapshots with `permit/issuer` and reconciles ambiguous crashes, as described
-in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so architecture does
-not get mistaken for production readiness.
+The next bounded slice is one-time claim delivery: durable claim records
+with the signed credential, delivery states, and claim fulfillment, as
+described in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so
+architecture does not get mistaken for production readiness.
 
 ## Development
 

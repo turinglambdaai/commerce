@@ -98,6 +98,14 @@ typed error code and a future retry time; completion that already landed
 reconciles to the recorded revision. No worker may infer authorization
 merely from outbox status.
 
+The `commerce/issuer` worker runs this loop: it claims one due row, refuses
+deterministic dead ends before signing (released with the typed commerce
+code and an operator backoff), signs the exact recorded bytes, and
+completes. Permit signing failures release as `permit-issue-failed` with a
+short backoff; after key or trust-store repair the same row completes.
+Losing the lease between claim and completion reports `lease-lost` to the
+caller and writes nothing.
+
 Lineage roots and revision rows are written only by
 `storage-complete-issuance-work!`, which appends the root plus revision zero
 or exactly one successor in the same transaction that completes the outbox

@@ -95,10 +95,10 @@ commerce/storage         durable projection and outbox protocol
 commerce/storage/sqlite  SQLite journal/projection/outbox backend
 commerce/pancake         Pancake webhook authentication boundary
 commerce/permit          Offer policy and Permit snapshot adapter
+commerce/issuer          explicit issuer worker: claim, prepare, sign, record
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
-commerce/issuer         outbox worker: snapshot, sign, record, hand off
 commerce/server         HTTP edge and lifecycle
 commerce/zpay           ZPAY protocol adapter
 commerce/operator       inspect/replay/reissue CLI

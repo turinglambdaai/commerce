@@ -39,6 +39,7 @@
  permit-snapshot-request-source-idempotency-key
  permit-snapshot-request-payload
  permit-snapshot-request-payload-bytes
+ permit-policy-for-offer
  prepare-permit-snapshot)
 
 (require permit/issuer
@@ -408,26 +409,37 @@
      (hash-set previous-constraints 'use_expires_at issued-at))))
 
 (define (resolve-policy catalog intent)
-  (define offer-id-value (rights-intent-offer-id intent))
+  (permit-policy-for-offer
+   catalog (rights-intent-offer-id intent)))
+
+;; Resolves the pinned policy for one Offer with the same typed failures as
+;; snapshot preparation, so workers can fail before signing.
+(define (permit-policy-for-offer catalog offer-id)
+  (unless (permit-policy-catalog? catalog)
+    (raise-argument-error
+     'permit-policy-for-offer "permit-policy-catalog?" catalog))
+  (unless (stable-id? offer-id)
+    (raise-argument-error
+     'permit-policy-for-offer "stable kebab-case offer identifier" offer-id))
   (when (hash-has-key? (permit-policy-catalog-deleted-offer-ids catalog)
-                       offer-id-value)
+                       offer-id)
     (raise-commerce
      'offer-deleted
      "rights intent references a deliberately deleted Offer"
-     (hash 'offer-id offer-id-value)))
+     (hash 'offer-id offer-id)))
   (define resolved-offer
     (hash-ref (permit-policy-catalog-offers-by-id catalog)
-              offer-id-value #f))
+              offer-id #f))
   (unless resolved-offer
     (raise-commerce
      'unknown-offer
      "rights intent references an unknown Offer"
-     (hash 'offer-id offer-id-value)))
+     (hash 'offer-id offer-id)))
   (unless (eq? (offer-kind resolved-offer) 'one-time)
     (raise-commerce
      'unsupported-offer-kind
      "Permit policy mapping currently supports only one-time Offers"
-     (hash 'offer-id offer-id-value 'kind (offer-kind resolved-offer))))
+     (hash 'offer-id offer-id 'kind (offer-kind resolved-offer))))
   (hash-ref (permit-policy-catalog-policies-by-id catalog)
             (offer-entitlement-policy-id resolved-offer)))
 

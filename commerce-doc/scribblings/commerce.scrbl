@@ -425,6 +425,67 @@ unsupported kinds/actions, and missing or conflicting lineage raise typed
 @tt{exn:fail:commerce} values. No outbox mutation, lineage persistence,
 signing, or delivery happens in this operation.
 
+@verbatim{
+(permit-policy-for-offer catalog offer-id)
+  -> permit-entitlement-policy?
+}
+
+Resolves the pinned policy for one Offer with the same typed failures as
+snapshot preparation, so a worker can fail before signing.
+
+@section{Explicit issuer worker}
+
+Server processes explicitly require @filepath{commerce/issuer.rkt}. This
+module imports the published @tt{permit/issuer} signing surface; the default
+facade never does. The worker owns no durable state: every decision derives
+from the claimed outbox row, the pinned catalog, and recorded lineage.
+
+@verbatim{
+(make-issuance-worker
+ #:catalog catalog #:issuer issuer
+ #:private-key private-key #:key-id key-id
+ #:trust-store trust-store
+ [#:clock clock] [#:owner owner]
+ [#:lease-seconds lease-seconds]
+ [#:transient-backoff-seconds transient-backoff]
+ [#:operator-backoff-seconds operator-backoff])
+  -> issuance-worker?
+}
+
+Binds one reviewed catalog, issuer identity, Ed25519 private key, trust
+store key id, and trust store behind one opaque worker value. The private
+key is never exposed by an accesssor. The clock returns two values, an
+epoch second and its RFC 3339 string; the default reads wall-clock UTC.
+
+@verbatim{
+(process-issuance-work! worker storage)
+  -> (or/c issuance-result? #f)
+}
+
+Claims one due outbox row and drives it: deterministic dead ends are
+released with their typed commerce code and an operator backoff before any
+signing; a grant with no lineage signs revision zero and a withdrawal signs
+an issuance-expiring successor naming the latest revision; the exact
+recorded bytes are signed outside the claim transaction and the revision is
+recorded through the transactional writer. Returns @tt{#f} when nothing is
+due. Dispositions: @tt{'completed} with the storage completion record,
+@tt{'released} with the typed error code, or @tt{'lease-lost} when the
+lease expired between claim and completion, in which case nothing was
+written. Permit signing failures release as @tt{'permit-issue-failed} with
+the transient backoff; the same durable work completes after repair.
+
+@verbatim{
+(derive-entitlement-id issuer subject-type subject-id offer-id)
+  -> string?
+
+(derive-credential-id entitlement-id revision)
+  -> string?
+}
+
+Deterministic lineage and credential identifiers. Reprocessing never
+allocates a second lineage or revision; a crash after signing converges
+because Ed25519 re-signs identical bytes to an identical signature.
+
 @section{First purchase}
 
 @verbatim{

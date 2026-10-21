@@ -26,20 +26,17 @@
    "mock" event-id (payload-digest payload) kind order-id offer-id subject-id
    usd-29 occurred-at))
 
-(define (delete-if-present path)
-  (when (file-exists? path)
-    (delete-file path)))
-
+;; One unique directory per database so rapid calls never share a path;
+;; deleting the directory removes sidecar files as well.
 (define (call-with-temporary-database proc)
-  (define path (make-temporary-file "commerce-issuance-~a.sqlite"))
-  (delete-file path)
+  (define directory
+    (make-temporary-file "commerce-issuance-~a" 'directory))
   (dynamic-wind
     void
-    (lambda () (proc path))
     (lambda ()
-      (for ([suffix '("" "-shm" "-wal")])
-        (delete-if-present
-         (string->path (string-append (path->string path) suffix)))))))
+      (proc (build-path directory "commerce.sqlite")))
+    (lambda ()
+      (delete-directory/files directory))))
 
 ;; Projects one paid mock order so its grant work sits in the outbox.
 ;; The surrounding test-case owns the temporary database path.

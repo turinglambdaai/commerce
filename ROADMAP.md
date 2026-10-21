@@ -3,16 +3,13 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is the explicit issuer worker: an
-owner-safe loop that claims outbox work through the lease contract, prepares
-the version-pinned Permit snapshot, signs the exact recorded bytes with
-`permit/issuer`, completes the work through
-`storage-complete-issuance-work!`, and reconciles an ambiguous crash after
-signing through the deterministic credential id and the recorded revision.
-Transient signer or secret-store failure releases the work with bounded
-backoff; deterministic mapping failures stop for operator review. Do not
-persist signed credential bytes, deliver claims, add an HTTP listener, or
-introduce subscription policy in the same change.
+The next implementation handoff is one-time claim delivery: a durable,
+append-only claim record that retains the signed credential bytes after the
+worker signs, explicit delivery states (signed, notified, claimed, expired),
+a claim-token trust boundary distinct from provider secrets, and claim
+fulfillment that never creates a second lineage revision. Do not add an
+HTTP listener, subscription policy, or operator UI in the same change;
+delivery transport and the claim portal are separate bounded slices.
 
 ## M0 — Architecture foundation
 

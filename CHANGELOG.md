@@ -6,6 +6,15 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add the explicit `commerce/issuer` worker: deterministic entitlement and
+  credential id derivation, version-pinned snapshot preparation, and
+  deterministic Ed25519 signing of the exact recorded bytes outside the claim
+  transaction. Deterministic dead ends are refused and released with typed
+  codes before any signing; Permit signing failures release as
+  `permit-issue-failed` with bounded backoff and complete after operator
+  repair; a lost lease between claim and completion reports `lease-lost` and
+  writes nothing. No signed credential bytes, delivery tokens, or HTTP
+  listeners are included.
 - Add an owner-safe issuance-outbox lease state machine: exclusive claim in
   one immediate transaction with observable attempts, expired-lease reclaim,
   owner-checked completion, and typed release with a bounded retry time.

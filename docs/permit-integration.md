@@ -5,7 +5,7 @@ Commerce consumes Permit's issuer-side API; Permit never depends on Commerce.
 ## Flow
 
 ```text
-rights intent
+rights intent (claimed issuance-outbox row)
     |
     v
 resolve Offer entitlement policy
@@ -20,8 +20,16 @@ construct a complete next rights snapshot
 permit/issuer signs exact payload bytes
     |
     v
-record credential + issuance audit + delivery claim
+storage-complete-issuance-work! records the revision + completes the row
 ```
+
+`commerce/issuer` is the explicit worker that runs this flow. It claims
+work through the storage lease, fails deterministic dead ends before any
+signing, signs the exact recorded bytes with Ed25519 determinism, and
+completes through the transactional lineage writer. A crash after signing
+is safe: the reclaiming worker re-signs identical bytes and the recorded
+revision converges. The signed envelope is not persisted by this boundary;
+durable evidence stays the unsigned payload until the delivery slice.
 
 An Offer references an immutable policy id, not a serialized provider object
 and not arbitrary Permit JSON supplied by the client. Policy configuration is
@@ -41,10 +49,11 @@ and fails with `offer-deleted`; a never-known id fails with `unknown-offer`.
 ## Purchase
 
 A first successful purchase creates revision 0 with a stable internal subject
-id and complete grants/constraints. The caller supplies deterministic
-credential and entitlement lineage ids. Reprocessing the same rights intent
-must use the recorded issuance result; the mapping itself is pure and byte
-stable for identical inputs.
+id and complete grants/constraints. The issuer worker derives deterministic
+credential and entitlement lineage ids (`derive-entitlement-id`,
+`derive-credential-id`), so reprocessing the same rights intent reconciles
+to the recorded issuance result; the mapping itself is pure and byte stable
+for identical inputs.
 
 ## Renewal and plan change
 

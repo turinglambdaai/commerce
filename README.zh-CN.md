@@ -22,7 +22,8 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 持久 SQLite 原始事件 journal、Pancake 原始字节验签与一次性订单主动查验、测试
 和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化，Offer policy
 已能生成版本固定、完整且经过 Permit 校验的权益快照，签发 outbox 也已具备
-owner 安全的租约状态机和事务型 lineage 写入器。
+owner 安全的租约状态机和事务型 lineage 写入器，显式 issuer worker 已能认领、
+签名并事务性记录签发证据。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -119,6 +120,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/storage/sqlite) ; SQLite 服务存储后端
 (require commerce/pancake)   ; Pancake 鉴权与主动订单证明
 (require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
+(require commerce/issuer)    ; 显式签发 worker：认领、签名、记录
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -149,18 +151,21 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   回收、owner 校验的完成与类型化释放；完成动作在同一个事务内追加 lineage 根
   加 revision 0（或恰好一个 successor）并完结 outbox 行，重复完成会对账回
   已记录的 revision；
+- 显式 `commerce/issuer` 签发 worker：确定性的 lineage/credential id、快照
+  准备、在 claim 事务之外对记录字节做确定性 Ed25519 签名、签名前以类型化
+  错误拒绝确定性死局、瞬态失败有限退避、崩溃对账——暂不持久化任何签名字节；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
 - Webhook HTTP 端点；
-- Permit issuer worker（快照签名）与 claim 交付；
+- credential 交付与 claim 记录；
 - ZPAY 或应用商店 adapter；
 - 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是 [ROADMAP.md](ROADMAP.md) 定义的显式 issuer worker：用
-`permit/issuer` 签发已准备的快照并对模糊崩溃做对账。缺口保持公开，避免把
+下一条受控纵切是一次性 claim 交付：带签名 credential 的持久 claim 记录、
+交付状态与领取兑现，见 [ROADMAP.md](ROADMAP.md)。缺口保持公开，避免把
 架构完成误当成生产就绪。
 
 ## 开发
