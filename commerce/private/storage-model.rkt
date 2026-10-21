@@ -20,7 +20,8 @@
                   entitlement-lookup lineage-lookup revision-lookup
                   latest-revision-lookup claim-lookup claim-notified
                   outbox-scan order-journal order-outbox
-                  issued-credential-lookup redrive readiness close)
+                  issued-credential-lookup redrive readiness
+                  retire-expired-claims close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented

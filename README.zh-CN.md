@@ -2,7 +2,7 @@
 
 **所有产品，共用一份商业真相——支付事件进入，签名产品权益输出。**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M2%20Ops-C15F3C)
+[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M3%20Subs-C15F3C)
 
 [English](README.md) · **中文**
 
@@ -167,14 +167,16 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   claim 各转换点）；
 - 只读 readiness 快照与类型化卡死告警，`raco commerce` 运营 CLI
   （find、explain、redrive）作为受支持的无头工作流；
+- 运维证据工具：一致性数据库快照、验证完整性与计数的恢复演练、过期
+  claim 的退休，以及证明同一 lineage 可携带不同 key id 签名的轮换演练；
 - 一条覆盖真实协议边界的可运行端到端旅程（`examples/full-journey.rkt`）
   与运营手册（[docs/runbook.md](docs/runbook.md)）；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
-- Webhook HTTP 端点与交付渠道（邮件、门户）；
-- 运营 CLI 封装、真实沙箱凭据（runbook 记录了演练步骤）；
+- Webhook HTTP 端点与交付渠道（邮件、门户）、真实沙箱凭据（runbook 记录
+  了演练步骤）、订阅里程碑（M3，下一步）；
 - ZPAY 或应用商店 adapter；
 - 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。

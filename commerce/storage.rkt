@@ -93,6 +93,7 @@
  storage-issued-credential-ref
  storage-redrive-issuance-work!
  storage-readiness
+ storage-retire-expired-claims!
  storage-close)
 
 (require racket/list
@@ -451,6 +452,14 @@
   (check-storage 'storage-readiness storage)
   (check-timestamp 'storage-readiness now)
   ((commerce-storage-readiness storage) now))
+
+;; Retention: transitions ready claims whose fulfillment window has passed
+;; to the terminal expired state and returns how many rows retired. Deletion
+;; of durable evidence is never part of this boundary.
+(define (storage-retire-expired-claims! storage #:now now)
+  (check-storage 'storage-retire-expired-claims! storage)
+  (check-timestamp 'storage-retire-expired-claims! now)
+  ((commerce-storage-retire-expired-claims storage) now))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)

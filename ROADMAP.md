@@ -3,10 +3,11 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-M1 is complete: the next handoff opens M2's operational baseline, starting
-with structured redacted logs and correlation ids, then health/readiness
-inspection and the operator CLI wrapper. Take one bounded slice at a time
-and keep the honest-gap lists in both READMEs current.
+M1 and M2 are complete. The next handoff opens M3 subscriptions: extend
+the paid-through projection with subscription order semantics, then renewal
+revisions, cancellation-at-period-end, and failed-payment grace through the
+same journal/outbox/lease boundary. One bounded slice at a time; keep the
+honest-gap lists in both READMEs current.
 
 ## M0 — Architecture foundation
 
@@ -32,12 +33,12 @@ and keep the honest-gap lists in both READMEs current.
 
 ## M2 — Operational baseline
 
-- [ ] Structured redacted logs and correlation ids
-- [ ] Health/readiness endpoints and stuck-outbox inspection
-- [ ] Encrypted backups with restore rehearsal
-- [ ] Key rotation and provider-secret rotation drills
-- [ ] Minimal operator CLI: find, replay, reissue, explain
-- [ ] Data retention and privacy export/deletion procedures
+- [x] Structured redacted logs and correlation ids
+- [x] Health/readiness endpoints and stuck-outbox inspection
+- [x] Encrypted backups with restore rehearsal
+- [x] Key rotation and provider-secret rotation drills
+- [x] Minimal operator CLI: find, replay, reissue, explain
+- [x] Data retention and privacy export/deletion procedures
 
 ## M3 — Subscriptions
 

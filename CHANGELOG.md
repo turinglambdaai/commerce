@@ -6,6 +6,13 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add operational evidence tooling: `snapshot-commerce-database!` writes a
+  consistent SQLite copy via VACUUM INTO while the service runs,
+  `verify-commerce-backup` rehearses restores by checking integrity,
+  database identity, schema version, and journal counts against the
+  original, and `storage-retire-expired-claims!` transitions
+  window-passed claims to their terminal expired state without deleting
+  any durable evidence.
 - Add `storage-readiness`, a single read-only snapshot of journal,
   projection, issuance-lease, and claim state, and `commerce/health`,
   which classifies it into typed stuck-work warnings

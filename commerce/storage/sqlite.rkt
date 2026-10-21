@@ -1287,6 +1287,27 @@ SQL
      (nullable work-oldest-pending-at) claim-ready claim-claimed
      claim-window-passed))
 
+  ;; Retention transitions expired-window claims to their terminal state.
+  ;; Status transitions are the only mutation claims allow; deletion of
+  ;; journal, lineage, or claim rows stays a versioned, audited schema
+  ;; operation outside this boundary.
+  (define (retire-expired-claims now)
+    (check-open)
+    (check-sqlite-integer 'now now)
+    (call-with-transaction
+     connection
+     (lambda ()
+       (query-exec
+        connection
+        #<<SQL
+UPDATE commerce_claim
+SET status = 'expired', updated_at = ?
+WHERE status = 'ready' AND expires_at <= ?
+SQL
+        now now)
+       (query-value connection "SELECT changes()"))
+      #:option 'immediate))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -1320,5 +1341,5 @@ SQL
    entitlement-ref lineage-ref revision-ref latest-revision
    claim-credential mark-claim-notified
    outbox-scan order-journal order-outbox issued-credential-ref redrive-work
-   readiness-snapshot
+   readiness-snapshot retire-expired-claims
    close))

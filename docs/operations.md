@@ -179,9 +179,21 @@ library never formats or ships logs itself.
 ## Backup and restore
 
 Production requires encrypted, versioned backups of journal, projections,
-outbox, entitlement lineage, issuance records, and provider mappings. Restore is
-tested into an isolated environment and followed by deterministic projection
-comparison before traffic is allowed.
+outbox, entitlement lineage, issued credentials, and provider mappings.
+`snapshot-commerce-database!` writes the consistent copy; encryption and
+shipping belong to deployment tooling. Restore is rehearsed with
+`verify-commerce-backup` — integrity, database identity, schema version,
+and journal counts — into an isolated environment before traffic is
+allowed.
+
+## Retention
+
+Claims whose fulfillment window passed retire to the terminal `expired`
+state through `storage-retire-expired-claims!` (also exposed as
+`commerce/retention`); they remain as audit rows and fulfillment refuses
+them either way. Deletion of journal, lineage, issued-credential, or claim
+rows is never a routine operation: it requires a versioned, audited schema
+operation with its own ADR, reviewed redaction, and a backup taken first.
 
 ## Manual actions
 

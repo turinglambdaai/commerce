@@ -105,6 +105,27 @@ order, entitlement, or claim identifiers. States:
 - expired: the fulfillment window passed. The row stays for audit;
   reissue is a deliberate, audited future operation, not a token reset.
 
+## Backup, restore, and rotation drills
+
+`snapshot-commerce-database!` writes one consistent copy through SQLite's
+`VACUUM INTO` while the service runs; encrypt and ship the copy with your
+deployment tooling (age/KMS), never inside Commerce. Rehearse restores,
+not backups: `verify-commerce-backup` opens the copy, checks integrity and
+the Commerce database identity, and compares journal counts against the
+original — a rehearsal that only "the file exists" proves nothing.
+
+Key rotation is two drills, both rehearsed before you need them:
+
+- **Permit signing keys:** add the new public key to the trust store as
+  `next`, switch `active`, move the old key to `retired`. New revisions
+  record their own `key_id`, so one lineage can carry revisions signed by
+  different keys; verifiers trust both while the old key is retired but
+  still trusted.
+- **Provider secrets:** rotate the Pancake merchant private key and update
+  the webhook public-key keyring in one maintenance window; the journal
+  keeps verifying old events (digests are already recorded), and only new
+  reads and webhooks touch the new keys.
+
 ## Live sandbox drill
 
 The repository's end-to-end evidence is deterministic (generated keys,
