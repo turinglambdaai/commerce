@@ -4,7 +4,27 @@ All notable changes to Commerce are documented here.
 
 ## Unreleased
 
+### Fixed
+
+- Render every issued RFC 3339 timestamp in true UTC regardless of the
+  host time zone. `seconds->date` is local wall clock (the positional
+  boolean is leap-second precision, not a UTC flag), so on a UTC+8 host
+  the default clock's `issued_at` and subscription paid-through windows
+  came out eight hours early while CI, running in UTC, could not see it.
+  The conversion now uses a zone-free civil calendar derivation with UTC
+  anchor tests; the subscription tests assert the production spelling
+  instead of a test-local copy that agreed with the old bug.
+
 ### Added
+
+- Add duration-based updates windows to the Permit policy model: a
+  constraints policy states the window either as a fixed instant or as
+  `#:updates-through-duration-days`, derived at issuance from the order's
+  paid-at evidence (mutually exclusive by validation). Replays converge
+  on the same bytes; withdrawal/renewal successors inherit the sold-with
+  window and only the use window is rewritten. `examples/gptp-studio-updates-window.rkt`
+  is the worked journey for the family's first paid product: a perpetual
+  Pro edition whose updates window is each purchase's own anniversary.
 
 - Add `commerce/server`, the HTTP webhook edge, and SQLite schema v6:
   the edge authenticates the exact request bytes, resolves the

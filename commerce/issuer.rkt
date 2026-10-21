@@ -23,7 +23,8 @@
          permit/issuer
          "permit.rkt"
          "storage.rkt"
-         "private/model.rkt")
+         "private/model.rkt"
+         "private/time.rkt")
 
 ;; The worker owns no durable state of its own. Every decision is derived
 ;; from the claimed outbox row, the pinned policy catalog, and the lineage
@@ -43,24 +44,10 @@
   (disposition completion error-code entitlement-id revision claim-token)
   #:transparent)
 
-(define (pad2 value)
-  (if (< value 10) (string-append "0" (number->string value))
-      (number->string value)))
-
-(define (rfc3339 epoch-seconds)
-  (define moment (seconds->date epoch-seconds #t))
-  (string-append
-   (number->string (date-year moment))
-   "-" (pad2 (date-month moment))
-   "-" (pad2 (date-day moment))
-   "T" (pad2 (date-hour moment))
-   ":" (pad2 (date-minute moment))
-   ":" (pad2 (date-second moment)) "Z"))
-
 (define default-clock
   (lambda ()
     (define now (current-seconds))
-    (values now (rfc3339 now))))
+    (values now (epoch-seconds->rfc3339 now))))
 
 (define (make-issuance-worker
          #:catalog catalog
@@ -223,7 +210,9 @@
              intent))
        (drive-issuance! worker storage item effective-intent issuer
                         subject-type entitlement-id latest claim-now
-                        (and paid-through (rfc3339 paid-through)))])))
+                        (and paid-through
+                             (epoch-seconds->rfc3339 paid-through))
+                        (and order (order-projection-paid-at order)))])))
 
 (define (release-deterministic! worker storage item now error-code)
   (storage-release-issuance-work! storage item
@@ -245,7 +234,8 @@
   (released-result code))
 
 (define (drive-issuance! worker storage item intent issuer subject-type
-                         entitlement-id latest claim-now use-expires-at)
+                         entitlement-id latest claim-now use-expires-at
+                         paid-at)
   (define action (rights-intent-action intent))
   (define revision
     (if latest
@@ -269,7 +259,8 @@
      #:entitlement-id entitlement-id
      #:issued-at issued-at-string
      #:previous previous
-     #:use-expires-at use-expires-at))
+     #:use-expires-at use-expires-at
+     #:paid-at paid-at))
   ;; Signing happens outside the claim transaction. Ed25519 signing is
   ;; deterministic, so if this process dies after signing, the reclaiming
   ;; worker re-signs the same bytes and the recorded revision converges.

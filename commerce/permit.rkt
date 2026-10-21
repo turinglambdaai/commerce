@@ -14,6 +14,7 @@
  make-permit-constraints-policy
  permit-constraints-policy-use-expires-at
  permit-constraints-policy-updates-through
+ permit-constraints-policy-updates-through-duration-days
  permit-constraints-policy-features-through
  permit-constraints-policy-version-min
  permit-constraints-policy-version-max
@@ -46,7 +47,8 @@
          racket/list
          racket/match
          "private/model.rkt"
-         "private/permit-model.rkt")
+         "private/permit-model.rkt"
+         "private/time.rkt")
 
 (define max-protocol-integer 9223372036854775807)
 (define validation-time "2026-01-01T00:00:00Z")
@@ -174,6 +176,7 @@
 (define (make-permit-constraints-policy
          #:use-expires-at [use-expires-at #f]
          #:updates-through [updates-through #f]
+         #:updates-through-duration-days [updates-through-duration-days #f]
          #:features-through [features-through #f]
          #:version-min [version-min #f]
          #:version-max [version-max #f]
@@ -182,6 +185,21 @@
          #:concurrent-seats [concurrent-seats #f]
          #:installation-id [installation-id #f]
          #:activation-required? [activation-required? #f])
+  (unless (or (not updates-through-duration-days)
+              (exact-positive-integer? updates-through-duration-days))
+    (raise-argument-error
+     'make-permit-constraints-policy
+     "(or/c #f exact-positive-integer?) updates-through-duration-days"
+     updates-through-duration-days))
+  ;; A policy states the updates window one way: a fixed publication
+  ;; instant for every credential under the policy, or a duration from the
+  ;; order's paid evidence computed at issuance. Both at once would make
+  ;; two credentials under one policy id carry different window semantics.
+  (when (and updates-through updates-through-duration-days)
+    (raise-argument-error
+     'make-permit-constraints-policy
+     "#:updates-through and #:updates-through-duration-days are mutually exclusive"
+     updates-through))
   (with-policy-validation
    'constraints #f
    (lambda ()
@@ -194,7 +212,8 @@
         (immutable-if-string version-max)
         named-seats device-activations concurrent-seats
         (immutable-if-string installation-id)
-        activation-required?))
+        activation-required?
+        updates-through-duration-days))
      (validate-snapshot-shape
       (subject #:type "person" #:id "commerce-policy-validation-subject")
       (list (grant #:products '("commerce-policy-validation-product")))
@@ -439,6 +458,32 @@
   (hash-ref (permit-policy-catalog-policies-by-id catalog)
             (offer-entitlement-policy-id resolved-offer)))
 
+;; A duration policy pins the updates window to paid evidence: paid-at plus
+;; the policy's days, derived deterministically so a replay converges on
+;; the same window. Returns the snapshot with the derived updates_through,
+;; #f when the policy carries no duration. Successors never recompute: the
+;; window a revision was sold with is part of its lineage record.
+(define (apply-updates-through-duration! policy snapshot paid-at intent)
+  (define duration
+    (permit-constraints-policy-updates-through-duration-days
+     (permit-entitlement-policy-constraints policy)))
+  (cond
+    [(not duration) #f]
+    [(not paid-at)
+     (raise-commerce
+      'order-paid-evidence-required
+      "policy pins the updates window to paid evidence, but the order carries no paid-at"
+      (hash 'policy-id (permit-entitlement-policy-id policy)
+            'source-idempotency-key
+            (rights-intent-idempotency-key intent)))]
+    [else
+     (hash-set snapshot
+               'constraints
+               (hash-set (hash-ref snapshot 'constraints)
+                         'updates_through
+                         (epoch-seconds->rfc3339
+                          (+ paid-at (* duration 86400)))))]))
+
 (define (prepare-permit-snapshot
          catalog intent
          #:issuer issuer
@@ -446,7 +491,8 @@
          #:entitlement-id entitlement-id
          #:issued-at issued-at
          #:previous [previous #f]
-         #:use-expires-at [use-expires-at #f])
+         #:use-expires-at [use-expires-at #f]
+         #:paid-at [paid-at #f])
   (unless (permit-policy-catalog? catalog)
     (raise-argument-error
      'prepare-permit-snapshot "permit-policy-catalog?" catalog))
@@ -457,6 +503,9 @@
   (check-request-string 'prepare-permit-snapshot "entitlement id" entitlement-id)
   (unless (string? issued-at)
     (raise-argument-error 'prepare-permit-snapshot "string? issued-at" issued-at))
+  (unless (or (not paid-at) (exact-positive-integer? paid-at))
+    (raise-argument-error
+     'prepare-permit-snapshot "(or/c #f exact-positive-integer?) paid-at" paid-at))
   (define policy (resolve-policy catalog intent))
   (define initial
     (make-initial-snapshot policy intent issuer credential-id
@@ -472,7 +521,8 @@
           (hash 'policy-id (permit-entitlement-policy-id policy)
                 'source-idempotency-key
                 (rights-intent-idempotency-key intent))))
-       initial]
+       (or (apply-updates-through-duration! policy initial paid-at intent)
+           initial)]
       ['withdraw
        (unless previous
          (raise-commerce
