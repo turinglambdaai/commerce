@@ -76,6 +76,15 @@ a one-time grant to revision 0 or a withdrawal to a successor whose use window
 ends at issuance, then returns the complete Permit payload and its exact
 serialized bytes. It does not sign, persist, lease, or deliver anything.
 
+A policy states its updates window exactly one way: a fixed publication
+instant shared by every credential under the policy, or a duration in days
+from the order's paid-at instant, derived at issuance (`gptp-studio-pro-v1`
+is the worked example: a perpetual Pro edition whose window is each
+purchase's own anniversary). The derived window is order evidence like any
+lineage input — a replay converges on the same bytes — and successors
+inherit it; only the use window is ever rewritten. Timestamps are rendered
+as true UTC independent of the host time zone.
+
 ## Claim
 
 A short-lived, single-purpose delivery mechanism through which an application
