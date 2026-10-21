@@ -138,6 +138,33 @@ event. Merchant authentication, query rejection, not-found, malformed response,
 and semantic mismatch require configuration repair or operator review rather
 than an immediate tight loop.
 
+## Readiness and stuck work
+
+`storage-readiness` returns one read-only snapshot: schema version, journal
+and projection counts, pending/processing issuance work with a stale-lease
+count, the oldest pending availability time, and claim states including the
+window-passed count. `commerce/health` classifies that snapshot into typed
+warnings — `projection-blocked`, `issuance-lease-expired`,
+`claim-window-passed` — and `health-report!` logs them on the commerce
+topic so a scheduled check leaves the same evidence a human would read.
+The future HTTP edge renders this value; the classification itself is
+transport-neutral and mutates nothing.
+
+## Operator CLI
+
+`raco commerce` wraps the operator surface for one service database:
+
+```bash
+raco commerce find    <database> [pending|processing|completed]
+raco commerce explain <database> <provider> <order-id>
+raco commerce redrive <database> <idempotency-key>
+```
+
+Output is JSON with redacted summaries only (canonical events, workflow
+state, credential metadata with an envelope digest). `redrive` exits 0 on
+success and 1 with a typed `code` on refusal. Direct SQL is emergency
+diagnosis; this CLI is the supported workflow.
+
 ## Observability
 
 `commerce/log` is the single logging path. Events are structured and

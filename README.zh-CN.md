@@ -124,6 +124,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/issuer)    ; 显式签发 worker：认领、签名、交付
 (require commerce/operator)  ; 运营 find/explain/redrive 面
 (require commerce/log)       ; 结构化脱敏事件日志
+(require commerce/health)    ; readiness 快照与卡死工作告警
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -164,6 +165,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   journal、绝不改投影行、绝不回退已完成工作的有界 redrive；
 - 结构化、构造即脱敏的事件日志，带运营关联 id（journal、投影、租约、
   claim 各转换点）；
+- 只读 readiness 快照与类型化卡死告警，`raco commerce` 运营 CLI
+  （find、explain、redrive）作为受支持的无头工作流；
 - 一条覆盖真实协议边界的可运行端到端旅程（`examples/full-journey.rkt`）
   与运营手册（[docs/runbook.md](docs/runbook.md)）；
 - 双语入口文档、规范架构与 CI 门禁。

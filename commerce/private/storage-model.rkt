@@ -8,7 +8,8 @@
  (struct-out entitlement-revision)
  (struct-out issuance-completion)
  (struct-out issued-credential-record)
- (struct-out claim-fulfillment))
+ (struct-out claim-fulfillment)
+ (struct-out readiness))
 
 ;; One opaque service-storage handle owns journal, projection, outbox,
 ;; issuance, and claim operations so the SQLite backend can enforce their
@@ -19,7 +20,7 @@
                   entitlement-lookup lineage-lookup revision-lookup
                   latest-revision-lookup claim-lookup claim-notified
                   outbox-scan order-journal order-outbox
-                  issued-credential-lookup redrive close)
+                  issued-credential-lookup redrive readiness close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented
@@ -65,3 +66,14 @@
 ;; One-time claim fulfillment: the claim row id, the credential it unlocks,
 ;; and the fulfillment time.
 (struct claim-fulfillment (claim-id credential claimed-at) #:transparent)
+
+;; One read-only readiness snapshot. Counts are self-explanatory; the two
+;; nullable fields are absent when their rows do not exist. stale-lease
+;; counts processing rows whose lease has already expired; claim
+;; window-passed counts ready claims nobody fulfilled in time.
+(struct readiness
+  (schema-version journal-total journal-unprojected projection-blocked
+                  work-pending work-processing work-stale-lease
+                  work-oldest-pending-at claim-ready claim-claimed
+                  claim-window-passed)
+  #:transparent)

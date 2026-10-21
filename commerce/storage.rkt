@@ -63,6 +63,18 @@
  claim-fulfillment-claim-id
  claim-fulfillment-credential
  claim-fulfillment-claimed-at
+ readiness?
+ readiness-schema-version
+ readiness-journal-total
+ readiness-journal-unprojected
+ readiness-projection-blocked
+ readiness-work-pending
+ readiness-work-processing
+ readiness-work-stale-lease
+ readiness-work-oldest-pending-at
+ readiness-claim-ready
+ readiness-claim-claimed
+ readiness-claim-window-passed
  storage-project-next!
  storage-claim-issuance-work!
  storage-complete-issuance-work!
@@ -80,6 +92,7 @@
  storage-order-outbox
  storage-issued-credential-ref
  storage-redrive-issuance-work!
+ storage-readiness
  storage-close)
 
 (require racket/list
@@ -431,6 +444,13 @@
          'outbox-id (issuance-outbox-item-id redriven))
    (hash))
   redriven)
+
+;; One read-only readiness snapshot for health endpoints and stuck-work
+;; inspection. Counts share one query instant; nothing is mutated.
+(define (storage-readiness storage #:now now)
+  (check-storage 'storage-readiness storage)
+  (check-timestamp 'storage-readiness now)
+  ((commerce-storage-readiness storage) now))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)

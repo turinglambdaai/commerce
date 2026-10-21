@@ -64,6 +64,8 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/issuer.rkt` | explicit issuer worker: claim, prepare, sign, record |
 | `commerce/operator.rkt` | operator find/explain/redrive surface |
 | `commerce/log.rkt` | structured redacted event logging |
+| `commerce/health.rkt` | readiness snapshot and stuck-work warnings |
+| `commerce/operator/cli.rkt` | `raco commerce` find/explain/redrive |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |
 | `examples/` | copyable newcomer paths |

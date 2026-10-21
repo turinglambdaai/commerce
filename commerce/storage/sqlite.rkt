@@ -139,6 +139,28 @@ WHERE issuance_outbox_id = ?
 SQL
   )
 
+(define select-readiness-sql
+  #<<SQL
+SELECT
+  (SELECT COUNT(*) FROM commerce_event_journal),
+  (SELECT COUNT(*) FROM commerce_event_journal AS j
+     LEFT JOIN commerce_projection_event AS p
+       ON p.journal_sequence = j.sequence
+    WHERE p.journal_sequence IS NULL),
+  (SELECT COUNT(*) FROM commerce_projection_event WHERE status = 'blocked'),
+  (SELECT COUNT(*) FROM commerce_issuance_outbox WHERE status = 'pending'),
+  (SELECT COUNT(*) FROM commerce_issuance_outbox WHERE status = 'processing'),
+  (SELECT COUNT(*) FROM commerce_issuance_outbox
+     WHERE status = 'processing' AND lease_expires_at <= ?1),
+  (SELECT MIN(available_at) FROM commerce_issuance_outbox
+     WHERE status = 'pending'),
+  (SELECT COUNT(*) FROM commerce_claim WHERE status = 'ready'),
+  (SELECT COUNT(*) FROM commerce_claim WHERE status = 'claimed'),
+  (SELECT COUNT(*) FROM commerce_claim
+     WHERE status = 'ready' AND expires_at <= ?1)
+SQL
+  )
+
 (define select-due-work-sql
   #<<SQL
 SELECT id, idempotency_key
@@ -1248,6 +1270,23 @@ SQL
              (lookup-outbox connection idempotency-key)])]))
      #:option 'immediate))
 
+  ;; One read-only aggregate answers readiness and stuck-work questions;
+  ;; every count comes from the same snapshot moment (the query instant).
+  (define (readiness-snapshot now)
+    (check-open)
+    (check-sqlite-integer 'now now)
+    (match-define
+      (vector journal-total journal-unprojected projection-blocked
+              work-pending work-processing work-lease-expired
+              work-oldest-pending-at claim-ready claim-claimed
+              claim-window-passed)
+      (query-row connection select-readiness-sql now))
+    (readiness
+     schema-version journal-total journal-unprojected projection-blocked
+     work-pending work-processing (nullable work-lease-expired)
+     (nullable work-oldest-pending-at) claim-ready claim-claimed
+     claim-window-passed))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -1281,4 +1320,5 @@ SQL
    entitlement-ref lineage-ref revision-ref latest-revision
    claim-credential mark-claim-notified
    outbox-scan order-journal order-outbox issued-credential-ref redrive-work
+   readiness-snapshot
    close))

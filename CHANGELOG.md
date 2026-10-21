@@ -6,6 +6,16 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add `storage-readiness`, a single read-only snapshot of journal,
+  projection, issuance-lease, and claim state, and `commerce/health`,
+  which classifies it into typed stuck-work warnings
+  (`projection-blocked`, `issuance-lease-expired`, `claim-window-passed`)
+  with optional operator-visible logging. The future HTTP edge renders
+  this value; nothing mutates.
+- Add `raco commerce`, the operator CLI wrapping `commerce/operator`:
+  `find` enumerates outbox work by status, `explain` prints a redacted
+  JSON order story, and `redrive` makes one pending row due with typed
+  nonzero-refusal exits.
 - Add `commerce/log`, the single structured logging path:
   redacted-by-construction events with a closed whitelist of correlation
   keys and scalar field values, instrumenting journal acceptance and

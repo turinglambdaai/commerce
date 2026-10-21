@@ -137,6 +137,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/issuer)    ; explicit issuer worker: claim, sign, deliver
 (require commerce/operator)  ; operator find/explain/redrive surface
 (require commerce/log)       ; structured redacted event logging
+(require commerce/health)    ; readiness snapshot and stuck-work warnings
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -188,6 +189,9 @@ Implemented now:
   work;
 - structured, redacted-by-construction event logging with operational
   correlation ids (journal, projection, lease, and claim transitions);
+- a read-only readiness snapshot with typed stuck-work warnings and the
+  `raco commerce` operator CLI (find, explain, redrive) as the supported
+  headless workflow;
 - one runnable end-to-end journey over the real protocol boundaries
   (`examples/full-journey.rkt`) and the operator runbook
   ([docs/runbook.md](docs/runbook.md));

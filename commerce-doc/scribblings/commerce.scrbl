@@ -584,6 +584,36 @@ and claim fulfillment or refusal. Exact replays and idle polling log at
 leases log at @tt{'warning}. Transport formatting and shipping are
 deployment concerns.
 
+@section{Readiness and health}
+
+Processes explicitly require @filepath{commerce/health.rkt}.
+
+@verbatim{
+(storage-readiness storage #:now now) -> readiness?
+}
+
+One read-only aggregate: schema version, journal and projection counts,
+pending and processing issuance work with a stale-lease count, the oldest
+pending availability time, and claim state counts including the
+window-passed count.
+
+@verbatim{
+(health-report storage #:now now) -> health-status?
+(health-report! storage #:now now) -> health-status?
+}
+
+Classifies the snapshot into typed warnings — @tt{'projection-blocked},
+@tt{'issuance-lease-expired}, @tt{'claim-window-passed} — and the logging
+variant emits them on the commerce topic. Nothing mutates; an HTTP edge
+would render this value.
+
+@section{Operator CLI}
+
+@tt{raco commerce find|explain|redrive} wraps
+@filepath{commerce/operator.rkt} for one service database. Output is JSON
+with redacted summaries; @tt{redrive} exits 0 on success and 1 with a
+typed code on refusal.
+
 @section{First purchase}
 
 @verbatim{

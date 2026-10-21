@@ -14,4 +14,7 @@
 (define version "0.1")
 (define pkg-authors '(turinglambdaai))
 (define license 'Apache-2.0)
+(define raco-commands
+  '(("commerce" "commerce/operator/cli.rkt"
+     "Commerce operator tools (find, explain, redrive)" "50")))
 
