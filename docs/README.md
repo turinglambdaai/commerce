@@ -47,6 +47,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0010: Explicit issuer worker](decisions/0010-issuer-worker.md)
 - [ADR-0011: One-time claim delivery](decisions/0011-claim-delivery.md)
 - [ADR-0012: Operator replay surface](decisions/0012-operator-replay-surface.md)
+- [ADR-0013: Structured, redacted-by-construction logs](decisions/0013-structured-logs.md)
 
 ## Source entry points
 
@@ -62,6 +63,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/permit.rkt` | versioned Offer policy to complete Permit snapshots |
 | `commerce/issuer.rkt` | explicit issuer worker: claim, prepare, sign, record |
 | `commerce/operator.rkt` | operator find/explain/redrive surface |
+| `commerce/log.rkt` | structured redacted event logging |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |
 | `examples/` | copyable newcomer paths |

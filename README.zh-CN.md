@@ -123,6 +123,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
 (require commerce/issuer)    ; 显式签发 worker：认领、签名、交付
 (require commerce/operator)  ; 运营 find/explain/redrive 面
+(require commerce/log)       ; 结构化脱敏事件日志
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -161,6 +162,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   revision 的类型化 claim 兑换；
 - 退款与运营重放面：脱敏的订单解释、outbox 枚举，以及只复用不可变
   journal、绝不改投影行、绝不回退已完成工作的有界 redrive；
+- 结构化、构造即脱敏的事件日志，带运营关联 id（journal、投影、租约、
+  claim 各转换点）；
 - 一条覆盖真实协议边界的可运行端到端旅程（`examples/full-journey.rkt`）
   与运营手册（[docs/runbook.md](docs/runbook.md)）；
 - 双语入口文档、规范架构与 CI 门禁。

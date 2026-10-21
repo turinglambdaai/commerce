@@ -6,6 +6,13 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add `commerce/log`, the single structured logging path:
+  redacted-by-construction events with a closed whitelist of correlation
+  keys and scalar field values, instrumenting journal acceptance and
+  conflict, projection and blocking, lease claim/complete/release,
+  redrive, and claim fulfillment or refusal. Raw bytes, tokens, and
+  unlisted keys are rejected before emission; transport formatting stays
+  a deployment concern.
 - Add the runnable end-to-end journey (`examples/full-journey.rkt`) over
   the real protocol boundaries — authenticated Pancake webhook, actively
   verified one-time order, durable journal/projection, deterministic

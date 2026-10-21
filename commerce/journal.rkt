@@ -13,6 +13,7 @@
  journal-ref)
 
 (require file/sha1
+         "log.rkt"
          "private/journal-model.rkt"
          "private/model.rkt"
          "private/storage-model.rkt")
@@ -52,8 +53,31 @@
            'event-id (payment-event-event-id event)
            'expected (payment-event-payload-digest event)
            'actual actual-digest)))
-  ((commerce-storage-journal-accept storage)
-   immutable-payload event received-at))
+  (define result
+    (with-handlers
+        ([exn:fail:commerce?
+          (lambda (failure)
+            (when (eq? (exn:fail:commerce-code failure) 'event-conflict)
+              (log-commerce-event!
+               'warning 'journal-conflict
+               (hash 'provider (payment-event-provider event)
+                     'event-id (payment-event-event-id event)
+                     'order-id (payment-event-order-id event))
+               (hash)))
+            (raise failure))])
+      ((commerce-storage-journal-accept storage)
+       immutable-payload event received-at)))
+  (define disposition (journal-acceptance-disposition result))
+  (log-commerce-event!
+   (if (eq? disposition 'accepted) 'info 'debug)
+   (if (eq? disposition 'accepted) 'journal-accepted 'journal-replayed)
+   (hash 'provider (payment-event-provider event)
+         'event-id (payment-event-event-id event)
+         'order-id (payment-event-order-id event))
+   (hash 'kind (payment-event-kind event)
+         'sequence
+         (journal-record-sequence (journal-acceptance-record result))))
+  result)
 
 (define (journal-ref storage provider event-id)
   (check-storage 'journal-ref storage)

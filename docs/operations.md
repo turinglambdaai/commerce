@@ -138,6 +138,17 @@ event. Merchant authentication, query rejection, not-found, malformed response,
 and semantic mismatch require configuration repair or operator review rather
 than an immediate tight loop.
 
+## Observability
+
+`commerce/log` is the single logging path. Events are structured and
+redacted by construction — whitelisted correlation keys (provider, event
+id, order id, subject, offer, outbox work, entitlement and revision, claim)
+and whitelisted scalar fields only; raw provider bytes, tokens, and keys
+are rejected before emission. Exact replays and idle polling log at debug;
+transitions log at info; conflicts, refusals, and lost leases log at
+warning. Ship the `commerce` topic as JSON lines in deployment; the
+library never formats or ships logs itself.
+
 ## Backup and restore
 
 Production requires encrypted, versioned backups of journal, projections,

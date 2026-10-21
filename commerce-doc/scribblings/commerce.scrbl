@@ -559,6 +559,31 @@ refuses to rewind in-flight work (@tt{'lease-not-held}) or completed work
 @tt{'unknown-issuance-work}. Replay always reuses the immutable journal
 through the normal projection path; no operation edits a projection row.
 
+@section{Structured event logging}
+
+Processes explicitly require @filepath{commerce/log.rkt} to observe their
+own transitions. Events are structured and redacted by construction:
+correlation keys are a closed whitelist (provider, event id, order id,
+subject, offer, outbox work, entitlement and revision, claim, sequence)
+and field values are redaction-safe scalars — strings, exact integers,
+booleans, and kebab-case workflow or error symbols. Raw provider bytes,
+tokens, and unlisted keys are rejected before emission.
+
+@verbatim{
+(log-commerce-event! level code correlation fields) -> void?
+  level       : (member level '(debug info warning error))
+  code        : symbol?
+  correlation : (hash/c symbol? (or/c string? exact-nonnegative-integer? #f))
+  fields      : (hash/c symbol? redaction-safe-scalar)
+}
+
+Public surfaces instrument their own transitions: journal acceptance and
+conflict, projection and blocking, lease claim/complete/release, redrive,
+and claim fulfillment or refusal. Exact replays and idle polling log at
+@tt{'debug}; transitions log at @tt{'info}; conflicts, refusals, and lost
+leases log at @tt{'warning}. Transport formatting and shipping are
+deployment concerns.
+
 @section{First purchase}
 
 @verbatim{

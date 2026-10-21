@@ -83,6 +83,7 @@
  storage-close)
 
 (require racket/list
+         "log.rkt"
          "private/model.rkt"
          "private/storage-model.rkt")
 
@@ -110,7 +111,21 @@
   (unless (exact-nonnegative-integer? processed-at)
     (raise-argument-error
      'storage-project-next! "exact-nonnegative-integer?" processed-at))
-  ((commerce-storage-project-next storage) processed-at))
+  (define result
+    ((commerce-storage-project-next storage) processed-at))
+  (when result
+    (cond
+      [(eq? (projection-result-disposition result) 'projected)
+       (log-commerce-event!
+        'info 'projection-projected
+        (hash 'sequence (projection-result-journal-sequence result))
+        (hash 'work (length (projection-result-outbox result))))]
+      [else
+       (log-commerce-event!
+        'warning 'projection-blocked
+        (hash 'sequence (projection-result-journal-sequence result))
+        (hash 'failure-code (projection-result-failure-code result)))]))
+  result)
 
 (define (storage-order-ref storage provider order-id)
   (check-storage 'storage-order-ref storage)
@@ -148,7 +163,16 @@
     (raise-argument-error
      'storage-claim-issuance-work! "exact-positive-integer?" lease-seconds))
   (check-timestamp 'storage-claim-issuance-work! now)
-  ((commerce-storage-issuance-claim storage) owner lease-seconds now))
+  (define item
+    ((commerce-storage-issuance-claim storage) owner lease-seconds now))
+  (when item
+    (log-commerce-event!
+     'info 'issuance-claimed
+     (hash 'idempotency-key (issuance-outbox-item-idempotency-key item)
+           'outbox-id (issuance-outbox-item-id item))
+     (hash 'attempts (issuance-outbox-item-attempts item)
+           'action (issuance-outbox-item-action item))))
+  item)
 
 ;; Appends the lineage root with revision zero, or exactly one successor,
 ;; and completes the claimed work in one transaction. The claimed item
@@ -225,13 +249,24 @@
       (raise-argument-error
        'storage-complete-issuance-work!
        "exact-nonnegative-integer?" claim-expires-at)))
-  ((commerce-storage-issuance-complete storage)
-   item issuer subject-type entitlement-id credential-id policy-id
-   policy-version (bytes->immutable-bytes payload-bytes) issued-at
-   recorded-at
-   (and signed-credential-bytes
-        (bytes->immutable-bytes signed-credential-bytes))
-   key-id claim-token claim-expires-at))
+  (define completion
+    ((commerce-storage-issuance-complete storage)
+     item issuer subject-type entitlement-id credential-id policy-id
+     policy-version (bytes->immutable-bytes payload-bytes) issued-at
+     recorded-at
+     (and signed-credential-bytes
+          (bytes->immutable-bytes signed-credential-bytes))
+     key-id claim-token claim-expires-at))
+  (log-commerce-event!
+   'info 'issuance-completed
+   (hash 'idempotency-key (issuance-outbox-item-idempotency-key item)
+         'entitlement-id entitlement-id
+         'credential-id credential-id)
+   (hash 'revision
+         (entitlement-revision-revision
+          (issuance-completion-revision completion))
+         'delivered? (and signed-credential-bytes #t)))
+  completion)
 
 ;; Returns transient work to 'pending with a typed error and a future retry
 ;; time. Only the lease owner may release, and the attempts counter is left
@@ -243,7 +278,13 @@
   (check-claimed-work 'storage-release-issuance-work! item)
   (check-typed-code 'storage-release-issuance-work! error-code)
   (check-timestamp 'storage-release-issuance-work! retry-at)
-  ((commerce-storage-issuance-release storage) item error-code retry-at))
+  (define item-released
+    ((commerce-storage-issuance-release storage) item error-code retry-at))
+  (log-commerce-event!
+   'info 'issuance-released
+   (hash 'idempotency-key (issuance-outbox-item-idempotency-key item))
+   (hash 'error-code error-code 'retry-at retry-at))
+  item-released)
 
 (define (storage-entitlement-ref storage entitlement-id)
   (check-storage 'storage-entitlement-ref storage)
@@ -300,7 +341,24 @@
      'storage-claim-credential
      "non-empty claim token up to 512 characters" token))
   (check-timestamp 'storage-claim-credential now)
-  ((commerce-storage-claim-lookup storage) token now))
+  (define fulfillment
+    (with-handlers
+        ([exn:fail:commerce?
+          (lambda (failure)
+            (log-commerce-event!
+             'warning 'claim-refused
+             (hash)
+             (hash 'code (exn:fail:commerce-code failure)))
+            (raise failure))])
+      ((commerce-storage-claim-lookup storage) token now)))
+  (log-commerce-event!
+   'info 'claim-fulfilled
+   (hash 'claim-id (claim-fulfillment-claim-id fulfillment)
+         'credential-id
+         (issued-credential-record-credential-id
+          (claim-fulfillment-credential fulfillment)))
+   (hash))
+  fulfillment)
 
 ;; Records that a delivery transport handed the claim token out. The first
 ;; notification timestamp wins; later retries are idempotent no-ops.
@@ -365,7 +423,14 @@
      'storage-redrive-issuance-work!
      "non-empty idempotency key up to 512 characters" idempotency-key))
   (check-timestamp 'storage-redrive-issuance-work! now)
-  ((commerce-storage-redrive storage) idempotency-key now))
+  (define redriven
+    ((commerce-storage-redrive storage) idempotency-key now))
+  (log-commerce-event!
+   'info 'issuance-redriven
+   (hash 'idempotency-key idempotency-key
+         'outbox-id (issuance-outbox-item-id redriven))
+   (hash))
+  redriven)
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)
