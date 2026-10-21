@@ -10,7 +10,9 @@
  (struct-out issued-credential-record)
  (struct-out claim-fulfillment)
  (struct-out readiness)
- (struct-out checkout-binding))
+ (struct-out checkout-binding)
+ (struct-out operator-audit-record)
+ (struct-out claim-record))
 
 ;; One opaque service-storage handle owns journal, projection, outbox,
 ;; issuance, and claim operations so the SQLite backend can enforce their
@@ -23,7 +25,9 @@
                   outbox-scan order-journal order-outbox
                   issued-credential-lookup redrive readiness
                   retire-expired-claims
-                  checkout-binding-create checkout-binding-lookup close)
+                  checkout-binding-create checkout-binding-lookup
+                  audit-append audit-scan reissue claim-record-lookup
+                  close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented
@@ -87,4 +91,16 @@
 (struct checkout-binding
   (merchant-external-id provider product-id offer-id subject-id currency
                         amount-minor-units currency-exponent)
+  #:transparent)
+
+;; Append-only operator-action evidence: what was done, by whom, why, and
+;; on which subject identifier.
+(struct operator-audit-record
+  (id action operator reason subject created-at)
+  #:transparent)
+
+;; The durable one-time claim row behind a fulfillment.
+(struct claim-record
+  (id claim-token-digest issued-credential-id status notified-at claimed-at
+      expires-at created-at updated-at)
   #:transparent)

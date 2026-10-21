@@ -106,6 +106,26 @@
  checkout-binding-currency-exponent
  storage-create-checkout-binding!
  storage-checkout-binding-ref
+ operator-audit-record?
+ operator-audit-record-id
+ operator-audit-record-action
+ operator-audit-record-operator
+ operator-audit-record-reason
+ operator-audit-record-subject
+ operator-audit-record-created-at
+ claim-record?
+ claim-record-id
+ claim-record-claim-token-digest
+ claim-record-issued-credential-id
+ claim-record-status
+ claim-record-notified-at
+ claim-record-claimed-at
+ claim-record-expires-at
+ claim-record-created-at
+ claim-record-updated-at
+ storage-append-audit!
+ storage-audit-scan
+ storage-reissue-claim!
  storage-close)
 
 (require racket/list
@@ -495,6 +515,85 @@
      merchant-external-id))
   ((commerce-storage-checkout-binding-lookup storage)
    merchant-external-id))
+
+;; Appends one operator-action audit record and returns its id. Audit rows
+;; are append-only evidence: what, by whom, why, on which subject.
+(define (storage-append-audit! storage
+                               #:action action
+                               #:operator operator
+                               #:reason reason
+                               #:subject subject
+                               #:created-at created-at)
+  (check-storage 'storage-append-audit! storage)
+  (for ([label/value
+         (in-list
+          (list (list "action" action)
+                (list "operator" operator)
+                (list "subject" subject)))]
+        #:unless (and (string? (second label/value))
+                      (<= 1 (string-length (second label/value)) 256)))
+    (raise-argument-error
+     'storage-append-audit!
+     (format "non-empty ~a up to 256 characters" (first label/value))
+     (second label/value)))
+  (unless (and (string? reason)
+               (<= 1 (string-length reason) 4096))
+    (raise-argument-error
+     'storage-append-audit!
+     "non-empty reason up to 4096 characters" reason))
+  (check-timestamp 'storage-append-audit! created-at)
+  ((commerce-storage-audit-append storage)
+   action operator reason subject created-at))
+
+(define (storage-audit-scan storage #:action [action #f])
+  (check-storage 'storage-audit-scan storage)
+  (when action
+    (unless (and (string? action) (<= 1 (string-length action) 128))
+      (raise-argument-error
+       'storage-audit-scan
+       "non-empty action up to 128 characters or #f" action)))
+  ((commerce-storage-audit-scan storage) action))
+
+;; Operator reissue: a customer whose claim window passed receives a fresh
+;; one-time claim for the SAME issued credential. Never creates a second
+;; credential or lineage revision; always appends audit evidence.
+(define (storage-reissue-claim! storage
+                                #:claim-id claim-id
+                                #:claim-token claim-token
+                                #:expires-at expires-at
+                                #:operator operator
+                                #:reason reason
+                                #:now now)
+  (check-storage 'storage-reissue-claim! storage)
+  (unless (exact-nonnegative-integer? claim-id)
+    (raise-argument-error
+     'storage-reissue-claim! "exact-nonnegative-integer?" claim-id))
+  (unless (and (string? claim-token)
+               (<= 1 (string-length claim-token) 512))
+    (raise-argument-error
+     'storage-reissue-claim!
+     "non-empty claim token up to 512 characters" claim-token))
+  (check-timestamp 'storage-reissue-claim! expires-at)
+  (unless (and (string? operator) (<= 1 (string-length operator) 256))
+    (raise-argument-error
+     'storage-reissue-claim!
+     "non-empty operator up to 256 characters" operator))
+  (unless (and (string? reason) (<= 1 (string-length reason) 4096))
+    (raise-argument-error
+     'storage-reissue-claim!
+     "non-empty reason up to 4096 characters" reason))
+  (check-timestamp 'storage-reissue-claim! now)
+  (define new-claim-id
+    ((commerce-storage-reissue storage)
+     claim-id claim-token expires-at operator reason now))
+  (storage-claim-record-ref storage new-claim-id))
+
+(define (storage-claim-record-ref storage claim-id)
+  (check-storage 'storage-claim-record-ref storage)
+  (unless (exact-nonnegative-integer? claim-id)
+    (raise-argument-error
+     'storage-claim-record-ref "exact-nonnegative-integer?" claim-id))
+  ((commerce-storage-claim-record-lookup storage) claim-id))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)

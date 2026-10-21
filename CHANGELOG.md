@@ -6,6 +6,15 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add operator audit, claim reissue, the claim portal, and provider
+  reconciliation on SQLite schema v7: an append-only audit table
+  recording action/operator/reason/subject for every manual action; a
+  rebuilt claim table that lets reissue append a fresh claim for the
+  same issued credential with audited fresh tokens; a `/claims` HTTP
+  endpoint fulfilling one-time tokens with typed 404/409/410 refusals;
+  and `commerce/reconcile` comparing signed provider order-fact reads
+  with projections into typed differences without ever mutating durable
+  state. v1-v6 migrate in place.
 - Add `commerce/server`, the HTTP webhook edge, and SQLite schema v6:
   the edge authenticates the exact request bytes, resolves the
   append-only durable checkout binding by order id, actively verifies

@@ -3,11 +3,13 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-M1 and M2 are complete. The next handoff opens M3 subscriptions: extend
-the paid-through projection with subscription order semantics, then renewal
-revisions, cancellation-at-period-end, and failed-payment grace through the
-same journal/outbox/lease boundary. One bounded slice at a time; keep the
-honest-gap lists in both READMEs current.
+M1-M3 and the operational baseline are complete, including the HTTP
+edge, claim portal, operator audit with reissue, and provider
+reconciliation. Every remaining gap is gated on something outside this
+repository: live sandbox credentials, provider API contracts for
+checkout creation and additional channels (ZPAY, app stores), and
+delivery transports. Those open on measured demand; keep the honest-gap
+lists in both READMEs current until then.
 
 ## M0 — Architecture foundation
 

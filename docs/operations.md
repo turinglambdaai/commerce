@@ -210,8 +210,26 @@ operation with its own ADR, reviewed redaction, and a backup taken first.
 
 ## Manual actions
 
-Manual reissue, refund response, subject recovery, and mapping repair require a
-reason and append an audit record. The operator CLI shows the intended effect
-and affected identifiers before mutation. Direct SQL is emergency diagnosis,
-not a supported workflow.
+Every manual action appends an immutable `commerce_operator_audit` row —
+action, operator, reason, subject, timestamp — through
+`storage-append-audit!`. Direct SQL is emergency diagnosis, not a
+supported workflow.
+
+Claim reissue (`storage-reissue-claim!`) helps a customer whose claim
+window passed: it appends a fresh `ready` claim for the SAME issued
+credential — never a second credential or lineage revision — and writes
+the audit record in the same transaction. The old claim row remains.
+
+## Claim portal and reconciliation
+
+The served endpoint exposes `/claims`: the customer's one-time token
+in, the signed Permit envelope out. Unknown tokens are 404, reused 409,
+expired 410; fulfillment never advances a lineage revision.
+
+`commerce/reconcile` compares bounded provider order facts with local
+projections and reports typed differences (`missing-webhook`,
+`provider-disagrees`, `provider-order-not-found`,
+`provider-read-refused`). It is read-only: differences are operator
+signals, and missing facts still enter through the webhook/journal
+path — commercial truth keeps exactly one ingress.
 

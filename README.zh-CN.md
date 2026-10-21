@@ -125,7 +125,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/operator)  ; 运营 find/explain/redrive 面
 (require commerce/log)       ; 结构化脱敏事件日志
 (require commerce/health)    ; readiness 快照与卡死工作告警
-(require commerce/server)    ; HTTP webhook 边界：验签、查验、journal
+(require commerce/server)    ; HTTP webhook 边界与 claim 门户
+(require commerce/reconcile) ; 有界渠道事实对账
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -170,9 +171,13 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   （find、explain、redrive）作为受支持的无头工作流；
 - 运维证据工具：一致性数据库快照、验证完整性与计数的恢复演练、过期
   claim 的退休，以及证明同一 lineage 可携带不同 key id 签名的轮换演练；
-- HTTP webhook 边界：对精确字节验签、解析持久 checkout 期望（schema v6，
-  只追加 binding）、主动查单、幂等 journal、完备的状态码映射——请求路径
-  内绝无签发或交付；
+- HTTP webhook 边界与 claim 门户：对精确字节验签、解析持久 checkout
+  期望（schema v6，只追加 binding）、主动查单、幂等 journal、完备状态码
+  映射；门户经 HTTP 兑换一次性 claim（未知/重用/过期分别 404/409/410）；
+- schema v7 运营审计（只追加的 action/operator/reason 证据）与有界
+  凭证补发（同一凭证换发新 token,带审计）；
+- 有界渠道对账：签名读取订单事实与投影比对，输出类型化差异，绝不改动
+  持久状态；
 - 订阅语义：渠道上报的 paid-through 窗口、在付费窗口到期的幂等键续订
   revision，以及周期末失效的取消 successor（ADR-0014）；
 - 一条覆盖真实协议边界的可运行端到端旅程（`examples/full-journey.rkt`）

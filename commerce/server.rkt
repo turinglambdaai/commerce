@@ -4,10 +4,13 @@
  webhook-endpoint?
  make-webhook-endpoint
  handle-webhook-post
+ handle-claim-post
  serve-webhook-endpoint)
 
 (require json
+         net/url
          racket/list
+         (only-in permit/envelope envelope->jsexpr read-envelope)
          web-server/http
          web-server/servlet-env
          "journal.rkt"
@@ -138,6 +141,40 @@
   (raise
    (exn:fail:commerce message (current-continuation-marks) code data)))
 
+;; Claim portal handling: the customer's one-time token in, the exact
+;; signed Permit envelope out. Token presence is the only authorization;
+;; wrong, reused, and expired tokens fail typed and mutate nothing.
+;; Fulfillment never creates or advances a lineage revision.
+(define (handle-claim-post endpoint token)
+  (unless (string? token)
+    (raise-argument-error 'handle-claim-post "string?" token))
+  (with-handlers
+      ([exn:fail:commerce?
+        (lambda (failure)
+          (define code (exn:fail:commerce-code failure))
+          (cond
+            [(eq? code 'claim-not-found)
+             (http-error 404 (hash 'fulfilled #f 'error "unknown-claim"))]
+            [(eq? code 'claim-already-claimed)
+             (http-error
+              409 (hash 'fulfilled #f 'error "already-claimed"))]
+            [(eq? code 'claim-expired)
+             (http-error
+              410 (hash 'fulfilled #f 'error "claim-expired"))]
+            [else
+             (http-error
+              422 (hash 'fulfilled #f 'error "claim-refused"))]))])
+    (define fulfillment
+      (storage-claim-credential (webhook-endpoint-storage endpoint)
+                                #:token token
+                                #:now (current-seconds)))
+    (define envelope
+      (read-envelope
+       (open-input-bytes
+        (issued-credential-record-envelope-bytes
+         (claim-fulfillment-credential fulfillment)))))
+    (http-error 200 (envelope->jsexpr envelope))))
+
 (define (signature-header-value raw-headers)
   (define header (headers-assq* #"x-waffo-signature" raw-headers))
   (and header (bytes->string/utf-8 (header-value header))))
@@ -151,23 +188,50 @@
   (parameterize ([current-custodian endpoint-custodian])
     (serve/servlet
      (lambda (request)
-       (define raw
-         (or (request-post-data/raw request) #""))
-       (define signature
-         (signature-header-value (request-headers/raw request)))
-       (define-values (status body)
-         (handle-webhook-post endpoint raw signature))
-       (response/full
-        status
-        #"commerce-webhook"
-        (current-seconds)
-        #"application/json"
-        '()
-        (list body)))
+       (define request-url (url->string (request-uri request)))
+       (define path
+         (cond
+           [(regexp-match? #rx"/webhooks/pancake$" request-url)
+            "/webhooks/pancake"]
+           [(regexp-match? #rx"/claims$" request-url) "/claims"]
+           [else request-url]))
+       (cond
+         [(equal? path "/webhooks/pancake")
+          (define raw
+            (or (request-post-data/raw request) #""))
+          (define signature
+            (signature-header-value (request-headers/raw request)))
+          (define-values (status body)
+            (handle-webhook-post endpoint raw signature))
+          (json-response status body)]
+         [(equal? path "/claims")
+          (define token
+            (let ([raw (or (request-post-data/raw request) #"")])
+              (with-handlers
+                  ([exn:fail? (lambda (_) #f)])
+                (hash-ref (string->jsexpr (bytes->string/utf-8 raw))
+                          'token #f))))
+          (define-values (status body)
+            (if token
+                (handle-claim-post endpoint token)
+                (http-error
+                 422 (hash 'fulfilled #f 'error "invalid-claim-request"))))
+          (json-response status body)]
+         [else
+          (json-response 404 (jsexpr->bytes (hash 'error "not-found")))]))
      #:port port
      #:listen-ip listen-ip
      #:command-line? #f
      #:servlet-path "/webhooks/pancake"
-     #:servlet-regexp #rx"^/webhooks/pancake$"))
+     #:servlet-regexp #rx"^/webhooks/pancake$|^/claims$"))
   (lambda ()
     (custodian-shutdown-all endpoint-custodian)))
+
+(define (json-response status body)
+  (response/full
+   status
+   #"commerce-endpoint"
+   (current-seconds)
+   #"application/json"
+   '()
+   (list body)))

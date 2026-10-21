@@ -1,6 +1,15 @@
 #lang racket/base
 
 (provide
+ pancake-order-facts?
+ pancake-order-facts-order-id
+ pancake-order-facts-status
+ pancake-order-facts-test-mode
+ pancake-order-facts-payment-id
+ pancake-order-facts-payment-status
+ pancake-order-facts-currency
+ pancake-order-facts-minor-units
+ read-pancake-onetime-order
  pancake-webhook-keyring
  pancake-webhook-keyring?
  default-pancake-webhook-keyring
@@ -681,6 +690,52 @@ GRAPHQL
      (raise-commerce
       'pancake-amount-invalid
       "Pancake payment total is not a valid display amount")]))
+
+;; Reconciliation reads provider facts without a webhook and without
+;; constructing a canonical event. The snapshot is the minimum the
+;; reconciler compares against the order projection.
+(struct pancake-order-facts
+  (order-id status test-mode payment-id payment-status currency minor-units)
+  #:transparent)
+
+(define (read-pancake-onetime-order client order-id)
+  (unless (pancake-merchant-client? client)
+    (raise-argument-error
+     'read-pancake-onetime-order "pancake-merchant-client?" client))
+  (unless (non-empty-string? order-id)
+    (raise-argument-error
+     'read-pancake-onetime-order "non-empty string?" order-id))
+  (define order (parse-order-response (request-order client order-id)))
+  (define status (required-response-string order 'status))
+  (define test-mode (hash-ref order 'testMode 'missing))
+  (unless (boolean? test-mode)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response has an invalid testMode field"
+     (hash 'field 'testMode)))
+  (define payments (hash-ref order 'payments #f))
+  (define payment
+    (and (list? payments) (pair? payments) (hash? (car payments))
+         (car payments)))
+  (unless payment
+    (raise-commerce
+     'pancake-payment-not-found
+     "Pancake order response is missing the verified payment"
+     (hash)))
+  (define amount-details (hash-ref payment 'snapshotAmountDetails #f))
+  (unless (hash? amount-details)
+    (raise-commerce
+     'pancake-order-response-invalid
+     "Pancake order response is missing payment amount details"
+     (hash 'field 'snapshotAmountDetails)))
+  (define currency (required-response-string amount-details 'currency))
+  (define total (required-response-string amount-details 'total))
+  (pancake-order-facts
+   order-id status test-mode
+   (required-response-string payment 'id)
+   (required-response-string payment 'status)
+   currency
+   (strict-display-amount->minor total 2)))
 
 (define (webhook-occurred-at timestamp)
   (define matched

@@ -10,7 +10,7 @@
          "../private/projection.rkt"
          "../private/storage-model.rkt")
 
-(define schema-version 6)
+(define schema-version 7)
 (define application-id 1129270605) ; ASCII "COMM"
 (define sqlite-max-integer 9223372036854775807)
 
@@ -627,6 +627,85 @@ SQL
            ))])
     (query-exec connection statement)))
 
+(define (create-audit-schema! connection)
+  ;; Reissue appends one claim per re-grant for the same credential, so the
+  ;; v7 migration rebuilds the claim table without the single-claim-per-
+  ;; credential uniqueness. Prior rows are preserved as audit evidence.
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_claim_v7 (
+  id INTEGER PRIMARY KEY,
+  claim_token_digest TEXT NOT NULL UNIQUE
+    CHECK (length(claim_token_digest) = 64),
+  issued_credential_id INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'claimed', 'expired')),
+  notified_at INTEGER CHECK (notified_at >= 0),
+  claimed_at INTEGER CHECK (claimed_at >= 0),
+  expires_at INTEGER NOT NULL CHECK (expires_at >= 0),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0),
+  updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
+  FOREIGN KEY (issued_credential_id)
+    REFERENCES commerce_issued_credential(id),
+  CHECK ((status = 'claimed' AND claimed_at IS NOT NULL) OR
+         (status IN ('ready', 'expired') AND claimed_at IS NULL))
+)
+SQL
+   )
+  (query-exec
+   connection
+   "INSERT INTO commerce_claim_v7
+  (id, claim_token_digest, issued_credential_id, status, notified_at,
+   claimed_at, expires_at, created_at, updated_at)
+SELECT id, claim_token_digest, issued_credential_id, status, notified_at,
+       claimed_at, expires_at, created_at, updated_at FROM commerce_claim")
+  (query-exec connection "DROP TABLE commerce_claim")
+  (query-exec
+   connection
+   "ALTER TABLE commerce_claim_v7 RENAME TO commerce_claim")
+  (query-exec
+   connection
+   #<<SQL
+CREATE TRIGGER commerce_claim_no_delete
+BEFORE DELETE ON commerce_claim
+BEGIN
+  SELECT RAISE(ABORT, 'commerce claim rows are immutable');
+END
+SQL
+   )
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_operator_audit (
+  id INTEGER PRIMARY KEY,
+  action TEXT NOT NULL CHECK (length(action) BETWEEN 1 AND 128),
+  operator TEXT NOT NULL CHECK (length(operator) BETWEEN 1 AND 256),
+  reason TEXT NOT NULL CHECK (length(reason) BETWEEN 1 AND 4096),
+  subject TEXT NOT NULL CHECK (length(subject) BETWEEN 1 AND 256),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0)
+)
+SQL
+   )
+  (for ([statement
+         (in-list
+          (list
+           #<<SQL
+CREATE TRIGGER commerce_operator_audit_no_update
+BEFORE UPDATE ON commerce_operator_audit
+BEGIN
+  SELECT RAISE(ABORT, 'commerce operator audit rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_operator_audit_no_delete
+BEFORE DELETE ON commerce_operator_audit
+BEGIN
+  SELECT RAISE(ABORT, 'commerce operator audit rows are immutable');
+END
+SQL
+           ))])
+    (query-exec connection statement)))
+
 (define (initialize-schema! connection)
   (define stored-application-id
     (query-value connection "PRAGMA application_id"))
@@ -642,6 +721,7 @@ SQL
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
         (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
         (query-exec connection
                     (format "PRAGMA application_id = ~a" application-id))
         (query-exec connection
@@ -662,6 +742,7 @@ SQL
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
         (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -673,6 +754,8 @@ SQL
                     "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
+        (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -684,6 +767,8 @@ SQL
                     "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (query-exec connection
                     "ALTER TABLE commerce_order_projection ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
+        (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -692,6 +777,15 @@ SQL
       connection
       (lambda ()
         (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
+        (query-exec connection
+                    (format "PRAGMA user_version = ~a" schema-version)))
+      #:option 'immediate)]
+    [(= stored-version 6)
+     (call-with-transaction
+      connection
+      (lambda ()
+        (create-audit-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -700,6 +794,8 @@ SQL
       connection
       (lambda ()
         (create-delivery-schema! connection)
+        (create-checkout-binding-schema! connection)
+        (create-audit-schema! connection)
         (query-exec connection
                     "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (query-exec connection
@@ -1432,6 +1528,117 @@ SQL
             id provider product-id offer-id subject-id currency amount
             exponent))))
 
+  ;; Operator actions are only real if they leave append-only evidence.
+  ;; The audit record names the action, the accountable operator, a free
+  ;; reason, and one subject identifier.
+  (define (append-audit! action operator reason subject created-at)
+    (check-open)
+    (check-sqlite-integer 'created-at created-at)
+    (call-with-transaction
+     connection
+     (lambda ()
+       (query-exec
+        connection
+        "INSERT INTO commerce_operator_audit
+  (action, operator, reason, subject, created_at) VALUES (?, ?, ?, ?, ?)"
+        action operator reason subject created-at)
+       (query-value connection "SELECT last_insert_rowid()"))
+      #:option 'immediate))
+
+  (define (audit-scan action)
+    (check-open)
+    (for/list ([row
+                (in-list
+                 (if action
+                     (query-rows
+                      connection
+                      "SELECT id, action, operator, reason, subject, created_at
+FROM commerce_operator_audit WHERE action = ? ORDER BY id"
+                      action)
+                     (query-rows
+                      connection
+                      "SELECT id, action, operator, reason, subject, created_at
+FROM commerce_operator_audit ORDER BY id")))])
+      (match-define (vector id audit-action audit-operator audit-reason
+                            audit-subject created-at)
+        row)
+      (operator-audit-record id audit-action audit-operator audit-reason
+                             audit-subject created-at)))
+
+  ;; Reissue gives a customer whose claim window passed a fresh one-time
+  ;; claim for the SAME issued credential. It never creates a second
+  ;; credential or lineage revision, and it always appends audit evidence.
+  (define (reissue-claim! claim-id new-token expires-at operator reason now)
+    (check-open)
+    (check-sqlite-integer 'claim-id claim-id)
+    (check-sqlite-integer 'expires-at expires-at)
+    (check-sqlite-integer 'now now)
+    (define digest
+      (bytes->hex-string (sha256-bytes (string->bytes/utf-8 new-token))))
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          #<<SQL
+SELECT c.issued_credential_id, i.credential_id
+FROM commerce_claim AS c
+JOIN commerce_issued_credential AS i
+  ON i.id = c.issued_credential_id
+WHERE c.id = ?
+SQL
+          claim-id))
+       (unless row
+         (raise-commerce
+          'claim-not-found
+          "claim reissue references an unknown claim"
+          (hash 'claim-id claim-id)))
+       (match-define (vector credential-record-id credential-id) row)
+       (query-exec
+        connection
+        #<<SQL
+INSERT INTO commerce_claim
+  (claim_token_digest, issued_credential_id, status, notified_at,
+   claimed_at, expires_at, created_at, updated_at)
+VALUES (?, ?, 'ready', NULL, NULL, ?, ?, ?)
+SQL
+        digest credential-record-id expires-at now now)
+       (define new-id
+         (query-value connection "SELECT last_insert_rowid()"))
+       (query-exec
+        connection
+        "INSERT INTO commerce_operator_audit
+  (action, operator, reason, subject, created_at)
+VALUES ('reissue-claim', ?, ?, ?, ?)"
+        operator reason
+        (format "claim ~a -> claim ~a credential ~a"
+                claim-id new-id credential-id)
+        now)
+       new-id)
+      #:option 'immediate))
+
+  (define (claim-record-ref claim-id)
+    (check-open)
+    (check-sqlite-integer 'claim-id claim-id)
+    (define row
+      (query-maybe-row
+       connection
+       #<<SQL
+SELECT id, claim_token_digest, issued_credential_id, status, notified_at,
+       claimed_at, expires_at, created_at, updated_at
+FROM commerce_claim WHERE id = ?
+SQL
+       claim-id))
+    (and row
+         (match row
+           [(vector id digest issued-id status notified-at claimed-at
+                    expires-at created-at updated-at)
+            (claim-record
+             id digest issued-id (string->symbol status)
+             (nullable notified-at)
+             (nullable claimed-at) expires-at created-at updated-at)])))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -1467,4 +1674,5 @@ SQL
    outbox-scan order-journal order-outbox issued-credential-ref redrive-work
    readiness-snapshot retire-expired-claims
    create-checkout-binding! checkout-binding-ref
+   append-audit! audit-scan reissue-claim! claim-record-ref
    close))

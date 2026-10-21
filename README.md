@@ -138,7 +138,8 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/operator)  ; operator find/explain/redrive surface
 (require commerce/log)       ; structured redacted event logging
 (require commerce/health)    ; readiness snapshot and stuck-work warnings
-(require commerce/server)    ; HTTP webhook edge: authenticate, verify, journal
+(require commerce/server)    ; HTTP webhook edge and claim portal
+(require commerce/reconcile) ; bounded provider-facts reconciliation
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -197,10 +198,18 @@ Implemented now:
   rehearsals that verify integrity and counts, expired-claim retirement,
   and a rotation drill proving one lineage carries revisions signed by
   different key ids;
-- an HTTP webhook edge: authenticate exact bytes, resolve the durable
-  checkout expectation (schema v6, append-only bindings), actively verify
-  the order, journal idempotently, and acknowledge with total status
-  mapping — no issuance or delivery in the request path;
+- an HTTP webhook edge and claim portal: authenticate exact bytes,
+  resolve the durable checkout expectation (schema v6, append-only
+  bindings), actively verify the order, journal idempotently, and
+  acknowledge with total status mapping; the portal fulfills one-time
+  claims over HTTP (404/409/410 for unknown, reused, and expired
+  tokens);
+- operator audit on schema v7 (append-only action/operator/reason
+  evidence) and bounded claim reissue for the same credential with
+  audited fresh tokens;
+- bounded provider reconciliation: signed order-fact reads compared
+  against projections with typed differences, never mutating durable
+  state;
 - subscription semantics: provider-reported paid-through windows,
   idempotently keyed renewal revisions that expire at the paid window,
   and cancellation successors that lapse at period end (ADR-0014);

@@ -1,7 +1,11 @@
 #lang racket/base
 
 (require commerce
+         commerce/issuer
+         commerce/journal
          commerce/pancake
+         commerce/permit
+         commerce/provider
          commerce/server
          commerce/storage
          commerce/storage/sqlite
@@ -10,6 +14,8 @@
          crypto
          crypto/libcrypto
          (only-in net/http-easy post response-status-code response-body)
+         permit/envelope
+         permit/issuer
          json
          net/url
          rackunit
@@ -20,6 +26,9 @@
 
 (define (parse-json payload)
   (string->jsexpr (bytes->string/utf-8 payload)))
+
+(require crypto)
+
 
 (parameterize ([crypto-factories (list libcrypto-factory)])
 
@@ -54,6 +63,24 @@
   (define keyring
     (pancake-webhook-keyring webhook-public-key-pem
                              production-public-key-pem))
+
+  ;; The claim-portal worker signs with its own Permit keypair.
+  (define-values (claim-private-key claim-public-key)
+    (generate-ed25519-keypair))
+  (define claim-trust-store
+    (jsexpr->trust-store
+     (hasheq 'protocol "permit-trust-store"
+             'version 1
+             'issuer "com.turinglambdaai"
+             'keys
+             (hasheq 'test-2026
+                     (hasheq 'algorithm "Ed25519"
+                             'public_key
+                             (public-key->base64 claim-public-key)
+                             'status "active"
+                             'purposes '("entitlement")
+                             'not_before 'null
+                             'not_after 'null)))))
 
   (define binding
     (pancake-order-binding
@@ -198,6 +225,65 @@
         (storage-order-ref storage "pancake" "ORD_srv_001"))
        (storage-close storage))))
 
+  (test-case "the claim portal fulfills once and refuses reuse"
+    (call-with-endpoint
+     (lambda (storage endpoint path)
+       (define issuance-worker
+         (make-issuance-worker
+          #:catalog
+          (make-permit-policy-catalog
+           (list (offer "taskly-pro-lifetime" "taskly" 'one-time
+                        usd-29 "taskly-pro-v1"))
+           (list
+            (make-permit-entitlement-policy
+             "taskly-pro-v1" 1
+             #:subject-type 'person
+             #:grants
+             (list (make-permit-grant-policy
+                    #:products '("taskly"))))))
+          #:issuer "com.turinglambdaai"
+          #:private-key claim-private-key
+          #:key-id "test-2026"
+          #:trust-store claim-trust-store
+          #:clock (lambda () (values 100 "2026-10-21T00:00:00Z"))
+          ;; The portal fulfills with the real clock, so the test window
+          ;; must comfortably outlive it.
+          #:claim-window-seconds 10000000000))
+       ;; Push one paid order through so a claim exists.
+       (define payload #"claim portal payment")
+       (journal-accept!
+        storage payload
+        (make-verified-payment-event
+         "mock" "evt_claim"
+         (bytes->hex-string (sha256-bytes payload)) 'payment-succeeded
+         "ord_claim" "taskly-pro-lifetime" "customer-server-001"
+         usd-29 1792108800)
+        #:received-at 10)
+       (storage-project-next! storage #:processed-at 11)
+       (define result
+         (process-issuance-work! issuance-worker storage))
+       (check-eq? (issuance-result-disposition result) 'completed)
+       (define token (issuance-result-claim-token result))
+
+       (define-values (status envelope)
+         (handle-claim-post endpoint token))
+       (check-eq? status 200)
+       (define claim-envelope (parse-json envelope))
+       (check-true (hash? claim-envelope))
+       (check-equal? (hash-ref claim-envelope 'key_id) "test-2026")
+       ;; Reuse fails 409 without leaking anything.
+       (define-values (replay-status replay-payload)
+         (handle-claim-post endpoint token))
+       (check-eq? replay-status 409)
+       (check-equal? (hash-ref (parse-json replay-payload) 'error)
+                     "already-claimed")
+       ;; Unknown tokens are 404.
+       (define-values (missing-status missing-payload)
+         (handle-claim-post endpoint "no-such-token"))
+       (check-eq? missing-status 404)
+       (check-false (hash-ref (parse-json missing-payload) 'fulfilled))
+        (storage-close storage))))
+
   (test-case "unknown checkout bindings are 404 without journaling"
     (call-with-endpoint
      (lambda (storage endpoint path)
@@ -211,6 +297,5 @@
        (check-false (hash-ref (parse-json payload) 'accepted))
        (storage-close storage))))
 
-  ;; The pure handler is the product; this proves the serve shell wires it
-  ;; to real HTTP on localhost.
+
 )

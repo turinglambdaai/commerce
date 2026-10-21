@@ -116,7 +116,7 @@
      (define storage (open-sqlite-commerce-storage path))
      (storage-close storage)
      (define connection (sqlite3-connect #:database path #:mode 'read-only))
-     (check-equal? (query-value connection "PRAGMA user_version") 6)
+     (check-equal? (query-value connection "PRAGMA user_version") 7)
      (check-equal?
       (query-value
        connection
@@ -142,8 +142,10 @@
      (define connection
        (sqlite3-connect #:database path #:mode 'read/write))
      (query-exec connection "PRAGMA foreign_keys = ON")
+     (query-exec connection "DROP TABLE commerce_operator_audit")
      (query-exec connection "DROP TABLE commerce_claim")
      (query-exec connection "DROP TABLE commerce_issued_credential")
+     (query-exec connection "DROP TABLE commerce_checkout_binding")
      (query-exec connection
                  "ALTER TABLE commerce_event_journal DROP COLUMN paid_through")
      (query-exec connection
@@ -158,7 +160,7 @@
      (define migrated (open-sqlite-commerce-storage path))
      (storage-close migrated)
      (define reopened (sqlite3-connect #:database path #:mode 'read-only))
-     (check-equal? (query-value reopened "PRAGMA user_version") 6)
+     (check-equal? (query-value reopened "PRAGMA user_version") 7)
      (check-equal?
       (query-row
        reopened
