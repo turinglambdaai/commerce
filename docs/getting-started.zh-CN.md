@@ -179,8 +179,8 @@ raco test -p commerce
 raco setup --check-pkg-deps commerce
 ```
 
-首个真实渠道是 Pancake。签名协议一致性、一次性订单主动查验以及 journal /
-投影 / outbox 持久处理和 Permit snapshot policy 映射已经实现。Schema v3 也已
-建立不可变 lineage 根与连续 revision 证据；lineage 写入器、lease worker、签名、
-交付与真实 sandbox 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
+首个真实渠道是 Pancake。签名协议一致性、一次性订单主动查验、journal /
+投影 / outbox 持久处理、Permit snapshot policy 映射、租约守护的签发、
+确定性签名与一次性 claim 交付均已实现。退款/运营重放工具与真实 sandbox
+证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
 

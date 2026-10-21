@@ -10,13 +10,16 @@
  issuance-result-error-code
  issuance-result-entitlement-id
  issuance-result-revision
+ issuance-result-claim-token
  derive-entitlement-id
  derive-credential-id)
 
-(require file/sha1
+(require (only-in crypto crypto-random-bytes)
+         file/sha1
          json
          racket/match
          racket/port
+         permit/envelope
          permit/issuer
          "permit.rkt"
          "storage.rkt"
@@ -30,14 +33,14 @@
 (struct issuance-worker
   (catalog issuer private-key key-id trust-store clock
            owner lease-seconds transient-backoff-seconds
-           operator-backoff-seconds)
+           operator-backoff-seconds claim-window-seconds)
   #:transparent)
 
 ;; disposition is 'completed, 'released, or 'lease-lost. A released result
 ;; names the typed error code that future operators will see on the outbox
 ;; row; completion exposes the storage completion record.
 (struct issuance-result
-  (disposition completion error-code entitlement-id revision)
+  (disposition completion error-code entitlement-id revision claim-token)
   #:transparent)
 
 (define (pad2 value)
@@ -69,7 +72,8 @@
          #:owner [owner "commerce-issuer"]
          #:lease-seconds [lease-seconds 30]
          #:transient-backoff-seconds [transient-backoff-seconds 30]
-         #:operator-backoff-seconds [operator-backoff-seconds 3600])
+         #:operator-backoff-seconds [operator-backoff-seconds 3600]
+         #:claim-window-seconds [claim-window-seconds 2592000])
   (unless (permit-policy-catalog? catalog)
     (raise-argument-error
      'make-issuance-worker "permit-policy-catalog?" catalog))
@@ -99,9 +103,12 @@
   (unless (exact-positive-integer? operator-backoff-seconds)
     (raise-argument-error
      'make-issuance-worker "exact-positive-integer?" operator-backoff-seconds))
+  (unless (exact-positive-integer? claim-window-seconds)
+    (raise-argument-error
+     'make-issuance-worker "exact-positive-integer?" claim-window-seconds))
   (issuance-worker catalog issuer private-key key-id trust-store clock
                    owner lease-seconds transient-backoff-seconds
-                   operator-backoff-seconds))
+                   operator-backoff-seconds claim-window-seconds))
 
 ;; Deterministic lineage ids. The same issuer, subject, and Offer must
 ;; always derive the same entitlement id, and one revision of that lineage
@@ -126,7 +133,7 @@
   (string-append "cred-" (substring digest 0 32)))
 
 (define (released-result error-code)
-  (issuance-result 'released #f error-code #f #f))
+  (issuance-result 'released #f error-code #f #f #f))
 
 ;; Drives one due outbox row through snapshot preparation, signing, and the
 ;; transactional lineage writer. Signing happens outside the claim
@@ -262,16 +269,22 @@
                                              (issuance-worker-transient-backoff-seconds
                                               worker)))
           (released-result 'permit-issue-failed))])
-    (issue-credential
-     (permit-snapshot-request-payload-bytes snapshot)
-     (issuance-worker-private-key worker)
-     (issuance-worker-key-id worker)
-     (issuance-worker-trust-store worker))
+    (define envelope
+      (issue-credential
+       (permit-snapshot-request-payload-bytes snapshot)
+       (issuance-worker-private-key worker)
+       (issuance-worker-key-id worker)
+       (issuance-worker-trust-store worker)))
+    ;; The claim token is generated once here, delivered to the caller for
+    ;; exactly one customer handoff, and stored only as a digest.
+    (define claim-token
+      (bytes->hex-string (crypto-random-bytes 16)))
     (with-handlers
         ([exn:fail:commerce?
           (lambda (failure)
             (if (eq? (exn:fail:commerce-code failure) 'lease-not-held)
-                (issuance-result 'lease-lost #f #f entitlement-id revision)
+                (issuance-result 'lease-lost #f #f entitlement-id revision
+                                 #f)
                 (release-commerce-failure worker storage item issued-at
                                           failure)))])
       (define completion
@@ -290,7 +303,20 @@
                                          (permit-snapshot-request-payload-bytes
                                           snapshot)
                                          #:issued-at issued-at-string
-                                         #:recorded-at issued-at))
+                                         #:recorded-at issued-at
+                                         #:signed-credential-bytes
+                                         (with-output-to-bytes
+                                           (lambda ()
+                                             (write-json
+                                              (envelope->jsexpr envelope))))
+                                         #:key-id
+                                         (issuance-worker-key-id worker)
+                                         #:claim-token claim-token
+                                         #:claim-expires-at
+                                         (+ issued-at
+                                            (issuance-worker-claim-window-seconds
+                                             worker))))
       (issuance-result 'completed completion #f entitlement-id
                        (entitlement-revision-revision
-                        (issuance-completion-revision completion))))))
+                        (issuance-completion-revision completion))
+                       claim-token))))

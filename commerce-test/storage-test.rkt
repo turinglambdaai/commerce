@@ -68,7 +68,7 @@
      (define connection
        (sqlite3-connect #:database path #:mode 'read/write))
      (query-exec connection "PRAGMA foreign_keys = ON")
-     (check-equal? (query-value connection "PRAGMA user_version") 3)
+     (check-equal? (query-value connection "PRAGMA user_version") 4)
      (check-equal?
       (query-value
        connection
@@ -533,7 +533,7 @@ SQL
      (storage-close storage)
      (define connection
        (sqlite3-connect #:database path #:mode 'read-only))
-     (check-equal? (query-value connection "PRAGMA user_version") 3)
+     (check-equal? (query-value connection "PRAGMA user_version") 4)
      (check-equal?
       (query-value
        connection
@@ -556,9 +556,12 @@ SQL
      (storage-project-next! storage #:processed-at 11)
      (storage-close storage)
 
-     ;; Remove only the v3 tables to reproduce the exact v2 structural subset.
+     ;; Remove the v3 and v4 tables to reproduce the exact v2 structural
+     ;; subset.
      (define old
        (sqlite3-connect #:database path #:mode 'read/write))
+     (query-exec old "DROP TABLE commerce_claim")
+     (query-exec old "DROP TABLE commerce_issued_credential")
      (query-exec old "DROP TABLE commerce_entitlement_revision")
      (query-exec old "DROP TABLE commerce_entitlement_lineage")
      (query-exec old "PRAGMA user_version = 2")
@@ -572,7 +575,7 @@ SQL
      (storage-close migrated)
      (define connection
        (sqlite3-connect #:database path #:mode 'read-only))
-     (check-equal? (query-value connection "PRAGMA user_version") 3)
+     (check-equal? (query-value connection "PRAGMA user_version") 4)
      (check-equal?
       (query-row
        connection

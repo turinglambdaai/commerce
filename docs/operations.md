@@ -33,9 +33,10 @@ history.
 
 ## Journal evidence
 
-The SQLite service store uses application id `COMM` and schema version 3.
-Opening a schema-v1 journal creates the projection, outbox, and lineage schema;
-opening schema v2 adds only the lineage tables. Both migrations are atomic and
+The SQLite service store uses application id `COMM` and schema version 4.
+Opening a schema-v1 journal creates the projection, outbox, lineage, and
+delivery schema; opening schema v2 adds lineage and delivery tables; opening
+schema v3 adds only the delivery tables. All migrations are atomic and
 preserve existing evidence. Operational inspection should select identifiers
 and status metadata, not `raw_payload`:
 
@@ -89,6 +90,14 @@ Every retry is bounded and observable. The current projector records
 deterministic poison work as a durable `blocked` marker with a typed reason;
 the operator replay command and broader quarantine workflow remain future work.
 
+Claim delivery state is explicit: `ready` until the token is fulfilled,
+`claimed` once fulfilled, and expired once the fulfillment window passes.
+The claim token is shown to the customer exactly once and stored only as a
+SHA-256 digest; operators inspect claim state by identifiers, never by
+token. Notification timestamps are idempotent first-writer-wins marks.
+Expired claims remain as audit rows; retention is a future versioned
+operation.
+
 Issuance rows are claimed through the storage lease contract: claim in a
 short transaction, set `processing`, increment `attempts`, and store an
 opaque owner and expiry; active leases are exclusive and expired leases are
@@ -110,8 +119,8 @@ Lineage roots and revision rows are written only by
 `storage-complete-issuance-work!`, which appends the root plus revision zero
 or exactly one successor in the same transaction that completes the outbox
 row. Revision rows retain exact unsigned Permit payload bytes and their
-digest. Routine inspection omits those bytes, and they must not be confused
-with signed credential bytes, which schema v3 does not store.
+digest; issued-credential rows retain the exact signed envelope bytes.
+Routine inspection omits those bytes.
 
 Pancake active reads make one transport attempt with a five-second connect
 limit and separate ten-second limits for receiving response headers and the

@@ -26,10 +26,12 @@ storage-complete-issuance-work! records the revision + completes the row
 `commerce/issuer` is the explicit worker that runs this flow. It claims
 work through the storage lease, fails deterministic dead ends before any
 signing, signs the exact recorded bytes with Ed25519 determinism, and
-completes through the transactional lineage writer. A crash after signing
-is safe: the reclaiming worker re-signs identical bytes and the recorded
-revision converges. The signed envelope is not persisted by this boundary;
-durable evidence stays the unsigned payload until the delivery slice.
+completes through the transactional lineage writer — recording the signed
+envelope and a one-time claim in the same transaction. A crash after
+signing is safe: the reclaiming worker re-signs identical bytes and the
+recorded revision converges. The claim token reaches the caller exactly
+once and is stored only as a digest; fulfillment returns the exact signed
+envelope bytes and never advances a lineage revision.
 
 An Offer references an immutable policy id, not a serialized provider object
 and not arbitrary Permit JSON supplied by the client. Policy configuration is
@@ -96,7 +98,7 @@ set against the pinned Offer policy before advancing the revision.
 
 SQLite schema v3 reserves append-only lineage roots and contiguous revision
 evidence, including the exact unsigned payload bytes and pinned policy
-version. `storage-complete-issuance-work!` is the only writer: it appends
+version; schema v4 adds the issued-credential record and one-time claim. `storage-complete-issuance-work!` is the only writer: it appends
 the lineage root plus revision zero, or exactly one successor, inside the
 same short transaction that completes the claimed issuance-outbox row, and
 reconciles an already-recorded completion to the same revision. This module

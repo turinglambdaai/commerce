@@ -190,9 +190,9 @@ raco setup --check-pkg-deps commerce
 ```
 
 The first production provider is Pancake. Signature conformance and active
-one-time-order verification plus durable journal/projection/outbox processing
-and Permit snapshot policy mapping are implemented. Schema v3 also establishes
-immutable lineage roots and contiguous revision evidence; the lineage writer,
-lease worker, signing, delivery, and live sandbox evidence remain separate M1
-gates in [ROADMAP.md](../ROADMAP.md).
+one-time-order verification plus durable journal/projection/outbox processing,
+Permit snapshot policy mapping, lease-guarded issuance, deterministic signing,
+and one-time claim delivery are implemented. Refund/operator replay tooling
+and live sandbox evidence remain separate M1 gates in
+[ROADMAP.md](../ROADMAP.md).
 

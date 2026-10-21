@@ -6,6 +6,14 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add one-time claim delivery on SQLite schema v4: an append-only
+  issued-credential record retaining the exact signed envelope bytes, a
+  claim table storing only the SHA-256 digest of a random one-time token,
+  ready/claimed/expired fulfillment states with idempotent notification
+  marks, and typed claim fulfillment that returns the signed bytes without
+  ever advancing a lineage revision. The worker's completion transaction
+  records the credential and its claim atomically; v3 databases migrate in
+  place. No HTTP listener, transport, or portal is included.
 - Add the explicit `commerce/issuer` worker: deterministic entitlement and
   credential id derivation, version-pinned snapshot preparation, and
   deterministic Ed25519 signing of the exact recorded bytes outside the claim

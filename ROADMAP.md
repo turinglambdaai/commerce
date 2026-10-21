@@ -3,13 +3,12 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is one-time claim delivery: a durable,
-append-only claim record that retains the signed credential bytes after the
-worker signs, explicit delivery states (signed, notified, claimed, expired),
-a claim-token trust boundary distinct from provider secrets, and claim
-fulfillment that never creates a second lineage revision. Do not add an
-HTTP listener, subscription policy, or operator UI in the same change;
-delivery transport and the claim portal are separate bounded slices.
+The next implementation handoff is the refund and operator replay flow:
+replay that always reuses the immutable journal through the normal
+projection path, an operator surface for the existing typed release codes
+(find, explain, re-drive bounded work), and honest documentation of what a
+withdrawal does and does not revoke. Do not edit projection rows, add an
+HTTP listener, or introduce subscription policy in the same change.
 
 ## M0 — Architecture foundation
 

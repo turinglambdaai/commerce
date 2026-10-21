@@ -10,7 +10,7 @@
          "../private/projection.rkt"
          "../private/storage-model.rkt")
 
-(define schema-version 3)
+(define schema-version 4)
 (define application-id 1129270605) ; ASCII "COMM"
 (define sqlite-max-integer 9223372036854775807)
 
@@ -431,6 +431,80 @@ SQL
            ))])
     (query-exec connection statement)))
 
+;; Schema v4 adds the delivery half of issuance. The issued-credential table
+;; retains the exact signed envelope bytes an append-only audit record; the
+;; claim table tracks one-time fulfillment state and stores only the claim
+;; token digest, never the token itself.
+(define (create-delivery-schema! connection)
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_issued_credential (
+  id INTEGER PRIMARY KEY,
+  issuance_outbox_id INTEGER NOT NULL UNIQUE,
+  entitlement_id TEXT NOT NULL
+    CHECK (length(entitlement_id) BETWEEN 1 AND 256),
+  revision INTEGER NOT NULL CHECK (revision >= 0),
+  credential_id TEXT NOT NULL UNIQUE
+    CHECK (length(credential_id) BETWEEN 1 AND 256),
+  key_id TEXT NOT NULL CHECK (length(key_id) BETWEEN 1 AND 256),
+  envelope_bytes BLOB NOT NULL CHECK (length(envelope_bytes) > 0),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0),
+  FOREIGN KEY (issuance_outbox_id)
+    REFERENCES commerce_issuance_outbox(id),
+  FOREIGN KEY (entitlement_id, revision)
+    REFERENCES commerce_entitlement_revision(entitlement_id, revision)
+)
+SQL
+   )
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_claim (
+  id INTEGER PRIMARY KEY,
+  claim_token_digest TEXT NOT NULL UNIQUE
+    CHECK (length(claim_token_digest) = 64),
+  issued_credential_id INTEGER NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'claimed', 'expired')),
+  notified_at INTEGER CHECK (notified_at >= 0),
+  claimed_at INTEGER CHECK (claimed_at >= 0),
+  expires_at INTEGER NOT NULL CHECK (expires_at >= 0),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0),
+  updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
+  FOREIGN KEY (issued_credential_id)
+    REFERENCES commerce_issued_credential(id),
+  CHECK ((status = 'claimed' AND claimed_at IS NOT NULL) OR
+         (status IN ('ready', 'expired') AND claimed_at IS NULL))
+)
+SQL
+   )
+  (for ([statement
+         (in-list
+          (list
+           #<<SQL
+CREATE TRIGGER commerce_issued_credential_no_update
+BEFORE UPDATE ON commerce_issued_credential
+BEGIN
+  SELECT RAISE(ABORT, 'commerce issued credential rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_issued_credential_no_delete
+BEFORE DELETE ON commerce_issued_credential
+BEGIN
+  SELECT RAISE(ABORT, 'commerce issued credential rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_claim_no_delete
+BEFORE DELETE ON commerce_claim
+BEGIN
+  SELECT RAISE(ABORT, 'commerce claim rows are immutable');
+END
+SQL
+           ))])
+    (query-exec connection statement)))
+
 (define (initialize-schema! connection)
   (define stored-application-id
     (query-value connection "PRAGMA application_id"))
@@ -444,6 +518,7 @@ SQL
         (create-journal-schema! connection)
         (create-projection-schema! connection)
         (create-lineage-schema! connection)
+        (create-delivery-schema! connection)
         (query-exec connection
                     (format "PRAGMA application_id = ~a" application-id))
         (query-exec connection
@@ -460,6 +535,7 @@ SQL
       (lambda ()
         (create-projection-schema! connection)
         (create-lineage-schema! connection)
+        (create-delivery-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -468,6 +544,15 @@ SQL
       connection
       (lambda ()
         (create-lineage-schema! connection)
+        (create-delivery-schema! connection)
+        (query-exec connection
+                    (format "PRAGMA user_version = ~a" schema-version)))
+      #:option 'immediate)]
+    [(= stored-version 3)
+     (call-with-transaction
+      connection
+      (lambda ()
+        (create-delivery-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -708,11 +793,24 @@ SQL
   ;; The caller must still hold the lease it claimed. Repeating a completion
   ;; that already landed reconciles to the recorded revision instead of
   ;; writing a second one.
-  (define (complete-work item issuer subject-type entitlement-id credential-id
-                         policy-id policy-version payload-bytes issued-at
-                         recorded-at)
+(define (complete-work item issuer subject-type entitlement-id credential-id
+                       policy-id policy-version payload-bytes issued-at
+                       recorded-at signed-credential-bytes key-id
+                       claim-token claim-expires-at)
     (check-sqlite-integer 'policy-version policy-version)
     (check-sqlite-integer 'recorded-at recorded-at)
+    (when signed-credential-bytes
+      (unless key-id
+        (raise-commerce
+         'invalid-issuance-record
+         "recording a signed credential requires the signing key id"
+         (hash 'idempotency-key (issuance-outbox-item-idempotency-key item)))))
+    (when claim-token
+      (unless (and signed-credential-bytes claim-expires-at)
+        (raise-commerce
+         'invalid-issuance-record
+         "recording a claim requires signed credential bytes and an expiry"
+         (hash 'idempotency-key (issuance-outbox-item-idempotency-key item)))))
     (define owner (issuance-outbox-item-lease-owner item))
     (define key (issuance-outbox-item-idempotency-key item))
     (define immutable-payload (bytes->immutable-bytes payload-bytes))
@@ -849,6 +947,33 @@ SET status = 'completed', lease_owner = NULL, lease_expires_at = NULL,
 WHERE id = ?
 SQL
            recorded-at recorded-at id)
+          ;; The signed envelope and its one-time claim land in the same
+          ;; transaction as the revision, so a completed issuance always has
+          ;; its delivery evidence or the caller chose to record none.
+          (when signed-credential-bytes
+            (query-exec
+             connection
+             #<<SQL
+INSERT INTO commerce_issued_credential
+  (issuance_outbox_id, entitlement_id, revision, credential_id, key_id,
+   envelope_bytes, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+SQL
+             id entitlement-id next-revision credential-id key-id
+             (bytes->immutable-bytes signed-credential-bytes) recorded-at)
+            (when claim-token
+              (query-exec
+               connection
+               #<<SQL
+INSERT INTO commerce_claim
+  (claim_token_digest, issued_credential_id, status, notified_at,
+   claimed_at, expires_at, created_at, updated_at)
+VALUES (?, (SELECT id FROM commerce_issued_credential
+WHERE issuance_outbox_id = ?), 'ready', NULL, NULL, ?, ?, ?)
+SQL
+               (bytes->hex-string
+                (sha256-bytes (string->bytes/utf-8 claim-token)))
+               id claim-expires-at recorded-at recorded-at)))
           (issuance-completion
            (lookup-outbox connection key)
            (lookup-revision connection entitlement-id next-revision))]))
@@ -894,6 +1019,108 @@ SQL
        (lookup-outbox connection key))
       #:option 'immediate))
 
+  ;; Fulfilling a claim is one short transaction: verify the token digest,
+  ;; verify the state and window, mark claimed, and return the exact signed
+  ;; envelope bytes. Fulfillment never touches lineage evidence.
+  (define (claim-credential token now)
+    (check-sqlite-integer 'now now)
+    (define digest
+      (bytes->hex-string (sha256-bytes (string->bytes/utf-8 token))))
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          #<<SQL
+SELECT c.id, c.status, c.expires_at, i.id, i.issuance_outbox_id,
+       i.entitlement_id, i.revision, i.credential_id, i.key_id,
+       i.envelope_bytes, i.created_at
+FROM commerce_claim AS c
+JOIN commerce_issued_credential AS i
+  ON i.id = c.issued_credential_id
+WHERE c.claim_token_digest = ?
+SQL
+          digest))
+       (cond
+         [(not row)
+          (raise-commerce
+           'claim-not-found
+           "claim token does not match any recorded claim"
+           (hash))]
+         [else
+          (match-define
+            (vector claim-id status expires-at credential-record-id
+                    outbox-id entitlement-id revision credential-id
+                    envelope-key-id envelope-bytes created-at)
+            row)
+          (cond
+            [(string=? status "claimed")
+             (raise-commerce
+              'claim-already-claimed
+              "claim token was already fulfilled"
+              (hash 'claim-id claim-id))]
+            [(or (string=? status "expired") (<= expires-at now))
+             (raise-commerce
+              'claim-expired
+              "claim token is outside its fulfillment window"
+              (hash 'claim-id claim-id 'expires-at expires-at 'now now))]
+            [else
+             (query-exec
+              connection
+              #<<SQL
+UPDATE commerce_claim
+SET status = 'claimed', claimed_at = ?, updated_at = ?
+WHERE id = ? AND status = 'ready'
+SQL
+              now now claim-id)
+             (claim-fulfillment
+              claim-id
+              (issued-credential-record
+               credential-record-id outbox-id entitlement-id revision
+               credential-id envelope-key-id
+               (bytes->immutable-bytes envelope-bytes)
+               created-at)
+              now)])]))
+     #:option 'immediate))
+
+  ;; Records that the claim token was handed to a delivery transport. The
+  ;; first timestamp wins so notification retries stay idempotent.
+  (define (mark-claim-notified token now)
+    (check-sqlite-integer 'now now)
+    (define digest
+      (bytes->hex-string (sha256-bytes (string->bytes/utf-8 token))))
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          "SELECT id, status FROM commerce_claim WHERE claim_token_digest = ?"
+          digest))
+       (cond
+         [(not row)
+          (raise-commerce
+           'claim-not-found
+           "claim token does not match any recorded claim"
+           (hash))]
+         [else
+          (match-define (vector claim-id status) row)
+          (when (string=? status "claimed")
+            (raise-commerce
+             'claim-already-claimed
+             "claim token was already fulfilled"
+             (hash 'claim-id claim-id)))
+          (query-exec
+           connection
+           #<<SQL
+UPDATE commerce_claim
+SET notified_at = COALESCE(notified_at, ?), updated_at = ?
+WHERE id = ?
+SQL
+           now now claim-id)]))
+     #:option 'immediate))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -925,4 +1152,5 @@ SQL
    accept lookup-journal project-next lookup-projection lookup-work
    claim-work complete-work release-work
    entitlement-ref lineage-ref revision-ref latest-revision
+   claim-credential mark-claim-notified
    close))

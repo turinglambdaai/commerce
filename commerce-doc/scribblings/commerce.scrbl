@@ -466,11 +466,13 @@ Claims one due outbox row and drives it: deterministic dead ends are
 released with their typed commerce code and an operator backoff before any
 signing; a grant with no lineage signs revision zero and a withdrawal signs
 an issuance-expiring successor naming the latest revision; the exact
-recorded bytes are signed outside the claim transaction and the revision is
-recorded through the transactional writer. Returns @tt{#f} when nothing is
-due. Dispositions: @tt{'completed} with the storage completion record,
-@tt{'released} with the typed error code, or @tt{'lease-lost} when the
-lease expired between claim and completion, in which case nothing was
+recorded bytes are signed outside the claim transaction, and the revision,
+the signed envelope, and a one-time claim are recorded in one transaction.
+The result's claim token is delivered to the caller exactly once for a
+single customer handoff. Returns @tt{#f} when nothing is due.
+Dispositions: @tt{'completed} with the storage completion record and claim
+token, @tt{'released} with the typed error code, or @tt{'lease-lost} when
+the lease expired between claim and completion, in which case nothing was
 written. Permit signing failures release as @tt{'permit-issue-failed} with
 the transient backoff; the same durable work completes after repair.
 
@@ -485,6 +487,46 @@ the transient backoff; the same durable work completes after repair.
 Deterministic lineage and credential identifiers. Reprocessing never
 allocates a second lineage or revision; a crash after signing converges
 because Ed25519 re-signs identical bytes to an identical signature.
+
+@subsection{One-time claim delivery}
+
+The issued credential record retains the exact signed envelope bytes; the
+claim stores only the token's SHA-256 digest. No transport or HTTP
+listener is included in this boundary.
+
+@verbatim{
+(storage-claim-credential storage #:token token #:now now)
+  -> claim-fulfillment?
+}
+
+Verifies the token, its state, and its fulfillment window, marks the claim
+claimed, and returns the claim id, the fulfillment time, and the
+@tt{issued-credential-record} with the exact signed envelope bytes, which
+verify as a Permit envelope for the recorded key id. Wrong, reused, and
+expired tokens raise typed @tt{exn:fail:commerce} values
+(@tt{'claim-not-found}, @tt{'claim-already-claimed},
+@tt{'claim-expired}) and mutate nothing. Fulfillment never creates or
+advances a lineage revision.
+
+@verbatim{
+(storage-mark-claim-notified storage #:token token #:now now) -> void?
+}
+
+Records that a delivery transport handed the token out. The first
+notification timestamp wins; later retries are idempotent no-ops.
+
+@verbatim{
+(storage-complete-issuance-work! storage item ...
+ [#:signed-credential-bytes envelope-bytes]
+ [#:key-id key-id]
+ [#:claim-token claim-token]
+ [#:claim-expires-at claim-expires-at])
+}
+
+The optional delivery half of completion: when the exact signed envelope
+bytes and key id are supplied, the completion transaction also records the
+issued credential; a claim token and expiry add its one-time fulfillment
+claim. Omitting them records issuance evidence without delivery, as before.
 
 @section{First purchase}
 

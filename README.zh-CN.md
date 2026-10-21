@@ -23,7 +23,7 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化，Offer policy
 已能生成版本固定、完整且经过 Permit 校验的权益快照，签发 outbox 也已具备
 owner 安全的租约状态机和事务型 lineage 写入器，显式 issuer worker 已能认领、
-签名并事务性记录签发证据。
+签名、把签名信封落为持久凭证证据，并交给客户一枚一次性 claim token。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -120,7 +120,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/storage/sqlite) ; SQLite 服务存储后端
 (require commerce/pancake)   ; Pancake 鉴权与主动订单证明
 (require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
-(require commerce/issuer)    ; 显式签发 worker：认领、签名、记录
+(require commerce/issuer)    ; 显式签发 worker：认领、签名、交付
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -138,7 +138,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 渠道 adapter 契约与 mock 购买演示；
 - 持久 SQLite 原始事件 journal，包含摘要复核、精确重放、冲突拒绝和数据库级
   不可变保护；
-- SQLite schema v3，包含 v1/v2 原位迁移、确定性 journal 投影、订单与签发
+- SQLite schema v4，包含 v1/v2/v3 原位迁移、确定性 journal 投影、订单与签发
   outbox 的原子写入，以及只追加且 revision 连续的 entitlement lineage 证据；
 - Pancake RSA-SHA256 原始字节验签，包含显式环境密钥、有限重放窗口、mode 绑定
   和脱敏的类型化错误；
@@ -153,20 +153,21 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   已记录的 revision；
 - 显式 `commerce/issuer` 签发 worker：确定性的 lineage/credential id、快照
   准备、在 claim 事务之外对记录字节做确定性 Ed25519 签名、签名前以类型化
-  错误拒绝确定性死局、瞬态失败有限退避、崩溃对账——暂不持久化任何签名字节；
+  错误拒绝确定性死局、瞬态失败有限退避、崩溃对账；
+- 一次性 claim 交付：只追加的签名凭证证据、仅存摘要的随机 claim token、
+  ready/claimed/expired 显式交付状态与幂等通知标记，以及永不推进 lineage
+  revision 的类型化 claim 兑换；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
-- Webhook HTTP 端点；
-- credential 交付与 claim 记录；
+- Webhook HTTP 端点与交付渠道（邮件、门户）；
 - ZPAY 或应用商店 adapter；
 - 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。
 
-下一条受控纵切是一次性 claim 交付：带签名 credential 的持久 claim 记录、
-交付状态与领取兑现，见 [ROADMAP.md](ROADMAP.md)。缺口保持公开，避免把
-架构完成误当成生产就绪。
+下一条受控纵切是退款与运营重放流程，见 [ROADMAP.md](ROADMAP.md)。缺口
+保持公开，避免把架构完成误当成生产就绪。
 
 ## 开发
 

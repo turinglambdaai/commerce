@@ -43,6 +43,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0008: SQLite entitlement lineage v3](decisions/0008-sqlite-entitlement-lineage-v3.md)
 - [ADR-0009: Issuance outbox lease state machine and transactional lineage writer](decisions/0009-issuance-lease-and-lineage-writer.md)
 - [ADR-0010: Explicit issuer worker](decisions/0010-issuer-worker.md)
+- [ADR-0011: One-time claim delivery](decisions/0011-claim-delivery.md)
 
 ## Source entry points
 
@@ -53,7 +54,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/provider.rkt` | explicit server-side provider boundary |
 | `commerce/journal.rkt` | durable event-acceptance protocol |
 | `commerce/storage.rkt` | durable projection and outbox protocol |
-| `commerce/storage/sqlite.rkt` | SQLite journal/projection/outbox/lineage backend |
+| `commerce/storage/sqlite.rkt` | SQLite journal/projection/outbox/lineage/claim backend |
 | `commerce/pancake.rkt` | Pancake webhook authentication and active order proof |
 | `commerce/permit.rkt` | versioned Offer policy to complete Permit snapshots |
 | `commerce/issuer.rkt` | explicit issuer worker: claim, prepare, sign, record |

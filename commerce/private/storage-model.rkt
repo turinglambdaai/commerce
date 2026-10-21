@@ -6,16 +6,18 @@
  (struct-out issuance-outbox-item)
  (struct-out entitlement-lineage)
  (struct-out entitlement-revision)
- (struct-out issuance-completion))
+ (struct-out issuance-completion)
+ (struct-out issued-credential-record)
+ (struct-out claim-fulfillment))
 
-;; One opaque service-storage handle owns journal, projection, outbox, and
-;; issuance operations so the SQLite backend can enforce their transaction
-;; boundaries.
+;; One opaque service-storage handle owns journal, projection, outbox,
+;; issuance, and claim operations so the SQLite backend can enforce their
+;; transaction boundaries.
 (struct commerce-storage
   (journal-accept journal-lookup project-next order-lookup outbox-lookup
                   issuance-claim issuance-complete issuance-release
                   entitlement-lookup lineage-lookup revision-lookup
-                  latest-revision-lookup close)
+                  latest-revision-lookup claim-lookup claim-notified close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented
@@ -50,3 +52,14 @@
 ;; Completion returns the finished work together with the revision it appended,
 ;; so a retry after an ambiguous crash reconciles instead of duplicating.
 (struct issuance-completion (outbox revision) #:transparent)
+
+;; The durable signed-credential audit record. envelope-bytes are the exact
+;; serialized Permit envelope (key id, payload, signature) as delivered.
+(struct issued-credential-record
+  (id issuance-outbox-id entitlement-id revision credential-id key-id
+      envelope-bytes created-at)
+  #:transparent)
+
+;; One-time claim fulfillment: the claim row id, the credential it unlocks,
+;; and the fulfillment time.
+(struct claim-fulfillment (claim-id credential claimed-at) #:transparent)

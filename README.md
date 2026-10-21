@@ -26,8 +26,9 @@ event journal, exact-byte Pancake webhook authentication, active Pancake
 one-time-order verification, transactional durable projection/outbox storage,
 version-pinned Offer-to-Permit snapshot mapping, an owner-safe issuance-outbox
 lease state machine with the transactional entitlement-lineage writer, the
-explicit Permit issuer worker that signs recorded bytes and reconciles
-ambiguous crashes, tests, and one runnable purchase walkthrough.
+explicit Permit issuer worker that signs recorded bytes, records them as
+durable credential evidence, and hands the customer a one-time claim token,
+tests, and one runnable purchase walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -132,7 +133,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/storage/sqlite) ; SQLite service-storage backend
 (require commerce/pancake)   ; Pancake authentication and active order proof
 (require commerce/permit)    ; reviewed Offer policy to Permit snapshots
-(require commerce/issuer)    ; explicit issuer worker: claim, sign, record
+(require commerce/issuer)    ; explicit issuer worker: claim, sign, deliver
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -151,7 +152,7 @@ Implemented now:
 - a provider adapter contract and mock walkthrough;
 - a durable SQLite raw-event journal with digest verification, exact replay,
   conflicting-replay rejection, and database-enforced immutable rows;
-- SQLite schema v3 with in-place v1/v2 migration, deterministic journal
+- SQLite schema v4 with in-place v1/v2/v3 migration, deterministic journal
   projection, atomic order plus issuance-outbox writes, and append-only,
   contiguous entitlement-lineage evidence;
 - exact-byte Pancake RSA-SHA256 verification with explicit environment keys,
@@ -172,20 +173,23 @@ Implemented now:
   credential ids, snapshot preparation, deterministic Ed25519 signing of the
   exact recorded bytes outside the claim transaction, typed refusal of
   deterministic dead ends before signing, bounded transient backoff, and
-  crash reconciliation — with no signed bytes persisted yet;
+  crash reconciliation;
+- one-time claim delivery: append-only signed-credential evidence, a
+  random claim token stored only as its digest, explicit
+  ready/claimed/expired fulfillment states with idempotent notification
+  marks, and typed claim fulfillment that never advances a lineage
+  revision;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
-- webhook HTTP endpoints;
-- credential delivery and claim records;
+- webhook HTTP endpoints and delivery transports (email, portal);
 - ZPAY or app-store adapters;
 - refund/operator replay tooling beyond the durable lease primitives,
   subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.
 
-The next bounded slice is one-time claim delivery: durable claim records
-with the signed credential, delivery states, and claim fulfillment, as
+The next bounded slice is the refund and operator replay flow, as
 described in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so
 architecture does not get mistaken for production readiness.
 
