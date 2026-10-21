@@ -49,6 +49,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0012: Operator replay surface](decisions/0012-operator-replay-surface.md)
 - [ADR-0013: Structured, redacted-by-construction logs](decisions/0013-structured-logs.md)
 - [ADR-0014: Subscription paid-through semantics](decisions/0014-subscription-semantics.md)
+- [ADR-0015: HTTP webhook edge](decisions/0015-http-webhook-edge.md)
 
 ## Source entry points
 
@@ -66,6 +67,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce/operator.rkt` | operator find/explain/redrive surface |
 | `commerce/log.rkt` | structured redacted event logging |
 | `commerce/health.rkt` | readiness snapshot and stuck-work warnings |
+| `commerce/server.rkt` | HTTP webhook edge: authenticate, verify, journal |
 | `commerce/operator/cli.rkt` | `raco commerce` find/explain/redrive |
 | `commerce/private/` | implementation-only model and validation |
 | `commerce-test/` | behavior and invariant tests |

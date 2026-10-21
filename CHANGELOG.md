@@ -6,6 +6,13 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add `commerce/server`, the HTTP webhook edge, and SQLite schema v6:
+  the edge authenticates the exact request bytes, resolves the
+  append-only durable checkout binding by order id, actively verifies
+  the one-time order, journals idempotently, and acknowledges with a
+  total status mapping (401/404/409/422/503) — with no issuance,
+  signing, or delivery in the request path. v1-v5 databases migrate in
+  place.
 - Add subscription semantics on SQLite schema v5: the canonical payment
   event carries the provider-reported paid-through window; the projection
   advances to that window and emits one idempotently keyed renewal intent

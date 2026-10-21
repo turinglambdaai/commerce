@@ -138,6 +138,19 @@ event. Merchant authentication, query rejection, not-found, malformed response,
 and semantic mismatch require configuration repair or operator review rather
 than an immediate tight loop.
 
+## Webhook endpoint
+
+`commerce/server` exposes one route that authenticates the exact request
+bytes, resolves the durable checkout binding, actively verifies the
+order, and journals. Status codes: 200 for accepted or exactly-replayed
+webhooks, 401 for anything that fails authentication (no evidence is
+created), 404 for orders with no durable checkout expectation, 409 for
+conflicting replays, 422 for semantic mismatches (operator review), and
+503 when the provider read is retryably unavailable so the provider
+retries. No issuance or delivery ever runs in the request path.
+Production deployments terminate TLS, enforce request limits, and ship
+the commerce log topic; the edge itself deliberately does none of that.
+
 ## Readiness and stuck work
 
 `storage-readiness` returns one read-only snapshot: schema version, journal

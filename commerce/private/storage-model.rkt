@@ -9,7 +9,8 @@
  (struct-out issuance-completion)
  (struct-out issued-credential-record)
  (struct-out claim-fulfillment)
- (struct-out readiness))
+ (struct-out readiness)
+ (struct-out checkout-binding))
 
 ;; One opaque service-storage handle owns journal, projection, outbox,
 ;; issuance, and claim operations so the SQLite backend can enforce their
@@ -21,7 +22,8 @@
                   latest-revision-lookup claim-lookup claim-notified
                   outbox-scan order-journal order-outbox
                   issued-credential-lookup redrive readiness
-                  retire-expired-claims close)
+                  retire-expired-claims
+                  checkout-binding-create checkout-binding-lookup close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented
@@ -77,4 +79,12 @@
                   work-pending work-processing work-stale-lease
                   work-oldest-pending-at claim-ready claim-claimed
                   claim-window-passed)
+  #:transparent)
+
+;; The durable server-side checkout expectation. The merchant external id
+;; is the opaque correlation reference created with the checkout; it maps
+;; to one provider product, stable Offer, stable subject, and exact money.
+(struct checkout-binding
+  (merchant-external-id provider product-id offer-id subject-id currency
+                        amount-minor-units currency-exponent)
   #:transparent)

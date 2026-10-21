@@ -96,12 +96,14 @@ commerce/storage/sqlite  SQLite journal/projection/outbox backend
 commerce/pancake         Pancake webhook authentication boundary
 commerce/permit          Offer policy and Permit snapshot adapter
 commerce/issuer          explicit issuer worker: claim, prepare, sign, record
+commerce/server          HTTP webhook edge: authenticate, verify, journal
+commerce/health          readiness snapshot and stuck-work warnings
+commerce/log             structured redacted event logging
 commerce/private/*       implementation-only helpers
 
 future explicit modules:
-commerce/server         HTTP edge and lifecycle
 commerce/zpay           ZPAY protocol adapter
-commerce/operator       inspect/replay/reissue CLI
+commerce/operator       operator CLI (raco commerce ships today)
 ```
 
 Physical extraction into separately versioned packages happens only when real

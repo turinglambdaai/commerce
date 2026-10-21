@@ -125,6 +125,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/operator)  ; 运营 find/explain/redrive 面
 (require commerce/log)       ; 结构化脱敏事件日志
 (require commerce/health)    ; readiness 快照与卡死工作告警
+(require commerce/server)    ; HTTP webhook 边界：验签、查验、journal
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -169,6 +170,9 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   （find、explain、redrive）作为受支持的无头工作流；
 - 运维证据工具：一致性数据库快照、验证完整性与计数的恢复演练、过期
   claim 的退休，以及证明同一 lineage 可携带不同 key id 签名的轮换演练；
+- HTTP webhook 边界：对精确字节验签、解析持久 checkout 期望（schema v6，
+  只追加 binding）、主动查单、幂等 journal、完备的状态码映射——请求路径
+  内绝无签发或交付；
 - 订阅语义：渠道上报的 paid-through 窗口、在付费窗口到期的幂等键续订
   revision，以及周期末失效的取消 successor（ADR-0014）；
 - 一条覆盖真实协议边界的可运行端到端旅程（`examples/full-journey.rkt`）
@@ -177,8 +181,9 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 
 尚未实现：
 
-- Webhook HTTP 端点与交付渠道（邮件、门户）、真实沙箱凭据（runbook 记录
-  了演练步骤）；
+- 交付渠道（邮件、门户）、真实沙箱凭据（runbook 记录了演练步骤）、
+  面向渠道 API 的 checkout 创建（binding 已可经 storage 记录，checkout
+  界面属产品侧）；
 - ZPAY、应用商店等额外渠道——按路线图以真实产品需求为门控；
 - ZPAY 或应用商店 adapter；
 - 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；

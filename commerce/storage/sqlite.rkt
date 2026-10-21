@@ -10,7 +10,7 @@
          "../private/projection.rkt"
          "../private/storage-model.rkt")
 
-(define schema-version 5)
+(define schema-version 6)
 (define application-id 1129270605) ; ASCII "COMM"
 (define sqlite-max-integer 9223372036854775807)
 
@@ -588,6 +588,45 @@ SQL
            ))])
     (query-exec connection statement)))
 
+(define (create-checkout-binding-schema! connection)
+  (query-exec
+   connection
+   #<<SQL
+CREATE TABLE commerce_checkout_binding (
+  merchant_external_id TEXT PRIMARY KEY
+    CHECK (length(merchant_external_id) BETWEEN 1 AND 128),
+  provider TEXT NOT NULL CHECK (length(provider) BETWEEN 1 AND 256),
+  product_id TEXT NOT NULL CHECK (length(product_id) BETWEEN 1 AND 256),
+  offer_id TEXT NOT NULL CHECK (length(offer_id) BETWEEN 1 AND 256),
+  subject_id TEXT NOT NULL CHECK (length(subject_id) BETWEEN 1 AND 256),
+  currency TEXT NOT NULL CHECK (length(currency) = 3),
+  amount_minor_units INTEGER NOT NULL CHECK (amount_minor_units >= 0),
+  currency_exponent INTEGER NOT NULL
+    CHECK (currency_exponent BETWEEN 0 AND 4),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0)
+)
+SQL
+   )
+  (for ([statement
+         (in-list
+          (list
+           #<<SQL
+CREATE TRIGGER commerce_checkout_binding_no_update
+BEFORE UPDATE ON commerce_checkout_binding
+BEGIN
+  SELECT RAISE(ABORT, 'commerce checkout binding rows are immutable');
+END
+SQL
+           #<<SQL
+CREATE TRIGGER commerce_checkout_binding_no_delete
+BEFORE DELETE ON commerce_checkout_binding
+BEGIN
+  SELECT RAISE(ABORT, 'commerce checkout binding rows are immutable');
+END
+SQL
+           ))])
+    (query-exec connection statement)))
+
 (define (initialize-schema! connection)
   (define stored-application-id
     (query-value connection "PRAGMA application_id"))
@@ -602,6 +641,7 @@ SQL
         (create-projection-schema! connection)
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
+        (create-checkout-binding-schema! connection)
         (query-exec connection
                     (format "PRAGMA application_id = ~a" application-id))
         (query-exec connection
@@ -621,6 +661,7 @@ SQL
         (create-projection-schema! connection)
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
+        (create-checkout-binding-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -643,6 +684,14 @@ SQL
                     "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (query-exec connection
                     "ALTER TABLE commerce_order_projection ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
+        (query-exec connection
+                    (format "PRAGMA user_version = ~a" schema-version)))
+      #:option 'immediate)]
+    [(= stored-version 5)
+     (call-with-transaction
+      connection
+      (lambda ()
+        (create-checkout-binding-schema! connection)
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -1334,6 +1383,55 @@ SQL
        (query-value connection "SELECT changes()"))
       #:option 'immediate))
 
+  ;; Checkout bindings are the durable server-side expectation created with
+  ;; a checkout: one provider product, stable Offer, stable subject, and the
+  ;; exact expected money, keyed by the opaque merchant external reference.
+  (define (create-checkout-binding! binding created-at)
+    (check-open)
+    (check-sqlite-integer 'created-at created-at)
+    (call-with-transaction
+     connection
+     (lambda ()
+       (query-exec
+        connection
+        #<<SQL
+INSERT INTO commerce_checkout_binding
+  (merchant_external_id, provider, product_id, offer_id, subject_id,
+   currency, amount_minor_units, currency_exponent, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+        (checkout-binding-merchant-external-id binding)
+        (checkout-binding-provider binding)
+        (checkout-binding-product-id binding)
+        (checkout-binding-offer-id binding)
+        (checkout-binding-subject-id binding)
+        (checkout-binding-currency binding)
+        (checkout-binding-amount-minor-units binding)
+        (checkout-binding-currency-exponent binding)
+        created-at)
+       binding)
+      #:option 'immediate))
+
+  (define (checkout-binding-ref merchant-external-id)
+    (check-open)
+    (define row
+      (query-maybe-row
+       connection
+       #<<SQL
+SELECT merchant_external_id, provider, product_id, offer_id, subject_id,
+       currency, amount_minor_units, currency_exponent, created_at
+FROM commerce_checkout_binding
+WHERE merchant_external_id = ?
+SQL
+       merchant-external-id))
+    (and row
+         (match-let ([(vector id provider product-id offer-id subject-id
+                            currency amount exponent _created-at)
+                      row])
+           (checkout-binding
+            id provider product-id offer-id subject-id currency amount
+            exponent))))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -1368,4 +1466,5 @@ SQL
    claim-credential mark-claim-notified
    outbox-scan order-journal order-outbox issued-credential-ref redrive-work
    readiness-snapshot retire-expired-claims
+   create-checkout-binding! checkout-binding-ref
    close))

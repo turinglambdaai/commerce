@@ -94,6 +94,18 @@
  storage-redrive-issuance-work!
  storage-readiness
  storage-retire-expired-claims!
+ checkout-binding
+ checkout-binding?
+ checkout-binding-merchant-external-id
+ checkout-binding-provider
+ checkout-binding-product-id
+ checkout-binding-offer-id
+ checkout-binding-subject-id
+ checkout-binding-currency
+ checkout-binding-amount-minor-units
+ checkout-binding-currency-exponent
+ storage-create-checkout-binding!
+ storage-checkout-binding-ref
  storage-close)
 
 (require racket/list
@@ -460,6 +472,29 @@
   (check-storage 'storage-retire-expired-claims! storage)
   (check-timestamp 'storage-retire-expired-claims! now)
   ((commerce-storage-retire-expired-claims storage) now))
+
+;; Persists the server-side checkout expectation created with a checkout.
+;; Bindings are append-only: the merchant external reference maps to one
+;; product, Offer, subject, and exact money, and never mutates.
+(define (storage-create-checkout-binding! storage binding #:created-at created-at)
+  (check-storage 'storage-create-checkout-binding! storage)
+  (unless (checkout-binding? binding)
+    (raise-argument-error
+     'storage-create-checkout-binding! "checkout-binding?" binding))
+  (check-timestamp
+   'storage-create-checkout-binding! created-at)
+  ((commerce-storage-checkout-binding-create storage) binding created-at))
+
+(define (storage-checkout-binding-ref storage merchant-external-id)
+  (check-storage 'storage-checkout-binding-ref storage)
+  (unless (and (string? merchant-external-id)
+               (<= 1 (string-length merchant-external-id) 128))
+    (raise-argument-error
+     'storage-checkout-binding-ref
+     "non-empty merchant external id up to 128 characters"
+     merchant-external-id))
+  ((commerce-storage-checkout-binding-lookup storage)
+   merchant-external-id))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)
