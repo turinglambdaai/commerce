@@ -196,6 +196,9 @@ Implemented now:
   rehearsals that verify integrity and counts, expired-claim retirement,
   and a rotation drill proving one lineage carries revisions signed by
   different key ids;
+- subscription semantics: provider-reported paid-through windows,
+  idempotently keyed renewal revisions that expire at the paid window,
+  and cancellation successors that lapse at period end (ADR-0014);
 - one runnable end-to-end journey over the real protocol boundaries
   (`examples/full-journey.rkt`) and the operator runbook
   ([docs/runbook.md](docs/runbook.md));
@@ -204,9 +207,9 @@ Implemented now:
 Not implemented yet:
 
 - webhook HTTP endpoints and delivery transports (email, portal);
-- delivery transports (email, portal), live sandbox credentials, and the
-  subscription milestone (M3, next);
-- ZPAY or app-store adapters;
+- delivery transports (email, portal), and live sandbox credentials;
+- ZPAY, app-store, and other additional channels — gated on measured
+  product demand per the roadmap;
 - refund/operator replay tooling beyond the durable lease primitives,
   subscriptions, seats, credential-claim portal, or an operator UI;
 - production deployment or a claim of payment-provider certification.

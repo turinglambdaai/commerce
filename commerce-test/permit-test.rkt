@@ -405,13 +405,9 @@
     (make-permit-policy-catalog
      (list subscription-offer)
      (list taskly-policy-v1)))
-  (failure-code
-   'unsupported-offer-kind
-   (lambda ()
-     (prepare-permit-snapshot
-      subscription-catalog
-      (intent 'grant #:offer-id "taskly-pro-monthly")
-      #:issuer "com.turinglambdaai"
-      #:credential-id "cred-subscription"
-      #:entitlement-id "ent-subscription"
-      #:issued-at "2026-10-17T03:00:00Z"))))
+  ;; Subscription Offers resolve their pinned policy like any other; the
+  ;; renewal semantics live in prepare-permit-snapshot's renew action.
+  (check-eq?
+   (permit-entitlement-policy-id
+    (permit-policy-for-offer subscription-catalog "taskly-pro-monthly"))
+   "taskly-pro-v1"))

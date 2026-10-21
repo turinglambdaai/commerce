@@ -421,9 +421,13 @@ validated complete payload, and @tt{permit-snapshot-request-payload-bytes}.
 The payload tree and bytes are immutable copies. Those bytes are Permit's
 single serialization and are the only bytes a later signer may sign.
 Unknown/deleted Offers, invalid policy/catalog/request data,
-unsupported kinds/actions, and missing or conflicting lineage raise typed
-@tt{exn:fail:commerce} values. No outbox mutation, lineage persistence,
-signing, or delivery happens in this operation.
+unsupported actions, and missing or conflicting lineage raise typed
+@tt{exn:fail:commerce} values. The optional @tt{#:use-expires-at}
+overrides the successor's @tt{use_expires_at}: a withdrawal for a
+subscription order expires at the paid-through moment (cancellation at
+period end), and the @tt{'renew} action — a successor over the previous
+revision of the same lineage — requires it. No outbox mutation, lineage
+persistence, signing, or delivery happens in this operation.
 
 @verbatim{
 (permit-policy-for-offer catalog offer-id)

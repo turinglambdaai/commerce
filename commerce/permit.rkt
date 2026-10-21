@@ -375,19 +375,20 @@
                  (rights-intent-subject-id intent))
          (equal? (hash-ref previous 'grants) expected-grants))))
 
-(define (make-withdrawal-snapshot policy intent issuer credential-id
-                                  entitlement-id issued-at previous)
+(define (make-successor-snapshot policy intent issuer credential-id
+                                 entitlement-id issued-at previous
+                                 use-expires-at)
   (unless (hash? previous)
     (raise-commerce
      'entitlement-lineage-conflict
-     "withdrawal lineage is not a complete Permit snapshot"
+     "successor lineage is not a complete Permit snapshot"
      (hash 'policy-id (permit-entitlement-policy-id policy)
            'source-idempotency-key
            (rights-intent-idempotency-key intent))))
   (unless (lineage-matches? previous policy intent issuer entitlement-id)
     (raise-commerce
      'entitlement-lineage-conflict
-     "withdrawal lineage does not match Offer, issuer, entitlement, or subject"
+     "successor lineage does not match Offer, issuer, entitlement, or subject"
      (hash 'policy-id (permit-entitlement-policy-id policy)
            'source-idempotency-key
            (rights-intent-idempotency-key intent))))
@@ -396,7 +397,7 @@
         (lambda (_failure)
           (raise-commerce
            'entitlement-lineage-conflict
-           "withdrawal lineage cannot produce a Permit successor"
+           "successor lineage cannot produce a Permit successor"
            (hash 'policy-id (permit-entitlement-policy-id policy)
                  'source-idempotency-key
                  (rights-intent-idempotency-key intent))))])
@@ -406,7 +407,7 @@
      #:credential-id credential-id
      #:issued-at issued-at
      #:constraints
-     (hash-set previous-constraints 'use_expires_at issued-at))))
+     (hash-set previous-constraints 'use_expires_at use-expires-at))))
 
 (define (resolve-policy catalog intent)
   (permit-policy-for-offer
@@ -435,11 +436,6 @@
      'unknown-offer
      "rights intent references an unknown Offer"
      (hash 'offer-id offer-id)))
-  (unless (eq? (offer-kind resolved-offer) 'one-time)
-    (raise-commerce
-     'unsupported-offer-kind
-     "Permit policy mapping currently supports only one-time Offers"
-     (hash 'offer-id offer-id 'kind (offer-kind resolved-offer))))
   (hash-ref (permit-policy-catalog-policies-by-id catalog)
             (offer-entitlement-policy-id resolved-offer)))
 
@@ -449,7 +445,8 @@
          #:credential-id credential-id
          #:entitlement-id entitlement-id
          #:issued-at issued-at
-         #:previous [previous #f])
+         #:previous [previous #f]
+         #:use-expires-at [use-expires-at #f])
   (unless (permit-policy-catalog? catalog)
     (raise-argument-error
      'prepare-permit-snapshot "permit-policy-catalog?" catalog))
@@ -484,8 +481,27 @@
           (hash 'policy-id (permit-entitlement-policy-id policy)
                 'source-idempotency-key
                 (rights-intent-idempotency-key intent))))
-       (make-withdrawal-snapshot
-        policy intent issuer credential-id entitlement-id issued-at previous)]
+       (make-successor-snapshot
+        policy intent issuer credential-id entitlement-id issued-at previous
+        (or use-expires-at issued-at))]
+      ['renew
+       (unless previous
+         (raise-commerce
+          'entitlement-lineage-required
+          "renewal requires the previous complete entitlement snapshot"
+          (hash 'policy-id (permit-entitlement-policy-id policy)
+                'source-idempotency-key
+                (rights-intent-idempotency-key intent))))
+       (unless (string? use-expires-at)
+         (raise-commerce
+          'invalid-entitlement-request
+          "renewal requires the paid-through use-expiry"
+          (hash 'policy-id (permit-entitlement-policy-id policy)
+                'source-idempotency-key
+                (rights-intent-idempotency-key intent))))
+       (make-successor-snapshot
+        policy intent issuer credential-id entitlement-id issued-at previous
+        use-expires-at)]
       [_
        (raise-commerce
         'unsupported-rights-action

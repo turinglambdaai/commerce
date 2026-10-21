@@ -10,7 +10,7 @@
          "../private/projection.rkt"
          "../private/storage-model.rkt")
 
-(define schema-version 4)
+(define schema-version 5)
 (define application-id 1129270605) ; ASCII "COMM"
 (define sqlite-max-integer 9223372036854775807)
 
@@ -18,7 +18,7 @@
   #<<SQL
 SELECT sequence, provider, event_id, raw_payload, payload_digest, event_kind,
        order_id, offer_id, subject_id, currency, amount_minor_units,
-       occurred_at, received_at
+       occurred_at, received_at, paid_through
 FROM commerce_event_journal
 WHERE provider = ? AND event_id = ?
 SQL
@@ -28,7 +28,7 @@ SQL
   #<<SQL
 SELECT j.sequence, j.provider, j.event_id, j.raw_payload, j.payload_digest,
        j.event_kind, j.order_id, j.offer_id, j.subject_id, j.currency,
-       j.amount_minor_units, j.occurred_at, j.received_at
+       j.amount_minor_units, j.occurred_at, j.received_at, j.paid_through
 FROM commerce_event_journal AS j
 LEFT JOIN commerce_projection_event AS p
   ON p.journal_sequence = j.sequence
@@ -41,7 +41,7 @@ SQL
 (define select-order-sql
   #<<SQL
 SELECT provider, order_id, offer_id, subject_id, currency,
-       amount_minor_units, paid, refunded, paid_at, refunded_at
+       amount_minor_units, paid, refunded, paid_at, refunded_at, paid_through
 FROM commerce_order_projection
 WHERE provider = ? AND order_id = ?
 SQL
@@ -111,7 +111,7 @@ SQL
   #<<SQL
 SELECT sequence, provider, event_id, raw_payload, payload_digest, event_kind,
        order_id, offer_id, subject_id, currency, amount_minor_units,
-       occurred_at, received_at
+       occurred_at, received_at, paid_through
 FROM commerce_event_journal
 WHERE provider = ? AND order_id = ?
 ORDER BY sequence
@@ -190,7 +190,7 @@ SQL
   (match-define
     (vector sequence provider event-id payload payload-digest event-kind
             order-id offer-id subject-id currency amount-minor-units
-            occurred-at received-at)
+            occurred-at received-at paid-through)
     row)
   (journal-record
    sequence
@@ -198,20 +198,23 @@ SQL
                   (string->symbol event-kind)
                   order-id offer-id subject-id
                   (money currency amount-minor-units)
-                  occurred-at)
+                  occurred-at
+                  (nullable paid-through))
    (bytes->immutable-bytes payload)
    received-at))
 
 (define (row->order row)
   (and row
        (match-let ([(vector provider order-id offer-id subject-id currency
-                            amount-minor-units paid refunded paid-at refunded-at)
+                            amount-minor-units paid refunded paid-at
+                            refunded-at paid-through)
                     row])
          (order-projection
           provider order-id offer-id subject-id
           (money currency amount-minor-units)
           (= paid 1) (= refunded 1)
-          (nullable paid-at) (nullable refunded-at)))))
+          (nullable paid-at) (nullable refunded-at)
+          (nullable paid-through)))))
 
 (define (row->outbox row)
   (and row
@@ -320,6 +323,7 @@ CREATE TABLE commerce_event_journal (
   amount_minor_units INTEGER NOT NULL CHECK (amount_minor_units >= 0),
   occurred_at INTEGER NOT NULL CHECK (occurred_at >= 0),
   received_at INTEGER NOT NULL CHECK (received_at >= 0),
+  paid_through INTEGER CHECK (paid_through >= 0),
   UNIQUE (provider, event_id)
 )
 SQL
@@ -360,6 +364,7 @@ CREATE TABLE commerce_order_projection (
   refunded INTEGER NOT NULL CHECK (refunded IN (0, 1)),
   paid_at INTEGER CHECK (paid_at >= 0),
   refunded_at INTEGER CHECK (refunded_at >= 0),
+  paid_through INTEGER CHECK (paid_through >= 0),
   last_event_sequence INTEGER NOT NULL,
   updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
   PRIMARY KEY (provider, order_id),
@@ -611,6 +616,8 @@ SQL
      (call-with-transaction
       connection
       (lambda ()
+        (query-exec connection
+                    "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (create-projection-schema! connection)
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
@@ -621,8 +628,21 @@ SQL
      (call-with-transaction
       connection
       (lambda ()
+        (query-exec connection
+                    "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (create-lineage-schema! connection)
         (create-delivery-schema! connection)
+        (query-exec connection
+                    (format "PRAGMA user_version = ~a" schema-version)))
+      #:option 'immediate)]
+    [(= stored-version 4)
+     (call-with-transaction
+      connection
+      (lambda ()
+        (query-exec connection
+                    "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
+        (query-exec connection
+                    "ALTER TABLE commerce_order_projection ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -631,6 +651,10 @@ SQL
       connection
       (lambda ()
         (create-delivery-schema! connection)
+        (query-exec connection
+                    "ALTER TABLE commerce_event_journal ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
+        (query-exec connection
+                    "ALTER TABLE commerce_order_projection ADD COLUMN paid_through INTEGER CHECK (paid_through >= 0)")
         (query-exec connection
                     (format "PRAGMA user_version = ~a" schema-version)))
       #:option 'immediate)]
@@ -646,8 +670,9 @@ SQL
    #<<SQL
 INSERT INTO commerce_order_projection
   (provider, order_id, offer_id, subject_id, currency, amount_minor_units,
-   paid, refunded, paid_at, refunded_at, last_event_sequence, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   paid, refunded, paid_at, refunded_at, paid_through, last_event_sequence,
+   updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(provider, order_id) DO UPDATE SET
   offer_id = excluded.offer_id,
   subject_id = excluded.subject_id,
@@ -657,6 +682,7 @@ ON CONFLICT(provider, order_id) DO UPDATE SET
   refunded = excluded.refunded,
   paid_at = excluded.paid_at,
   refunded_at = excluded.refunded_at,
+  paid_through = excluded.paid_through,
   last_event_sequence = excluded.last_event_sequence,
   updated_at = excluded.updated_at
 SQL
@@ -670,6 +696,7 @@ SQL
    (if (order-projection-refunded? order) 1 0)
    (sql-nullable (order-projection-paid-at order))
    (sql-nullable (order-projection-refunded-at order))
+   (sql-nullable (order-projection-paid-through order))
    journal-sequence
    processed-at))
 
@@ -752,8 +779,9 @@ SQL
            #<<SQL
 INSERT INTO commerce_event_journal
   (provider, event_id, raw_payload, payload_digest, event_kind, order_id,
-   offer_id, subject_id, currency, amount_minor_units, occurred_at, received_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   offer_id, subject_id, currency, amount_minor_units, occurred_at,
+   received_at, paid_through)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
            (payment-event-provider event)
            (payment-event-event-id event)
@@ -766,7 +794,8 @@ SQL
            (money-currency (payment-event-amount event))
            (money-minor-units (payment-event-amount event))
            (payment-event-occurred-at event)
-           received-at)
+           received-at
+           (sql-nullable (payment-event-paid-through event)))
           (journal-acceptance
            'accepted
            (lookup-record connection
@@ -957,11 +986,8 @@ SQL
                         'subject-id subject-id
                         'lineage-entitlement-id existing-id
                         'requested-entitlement-id entitlement-id)))
-               (when (eq? action-symbol 'grant)
-                 (raise-commerce
-                  'entitlement-lineage-conflict
-                  "initial one-time grant cannot replace an existing lineage"
-                  (hash 'idempotency-key key 'entitlement-id entitlement-id)))
+               ;; Grant successors over an existing lineage are renewals;
+               ;; the worker refuses second one-time grants before signing.
                (define latest
                  (row->revision
                   (query-maybe-row connection select-latest-revision-sql

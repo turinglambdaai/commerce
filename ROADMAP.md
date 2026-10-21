@@ -42,11 +42,18 @@ honest-gap lists in both READMEs current.
 
 ## M3 — Subscriptions
 
-- [ ] Paid-through projection and renewal revisions
-- [ ] Cancellation-at-period-end semantics
-- [ ] Failed-payment grace policy
-- [ ] Activation lease refresh where timely enforcement is required
-- [ ] Upgrade/downgrade proration represented without provider leakage
+- [x] Paid-through projection and renewal revisions
+- [x] Cancellation-at-period-end semantics
+- [x] Failed-payment grace policy
+- [x] Activation lease refresh where timely enforcement is required
+- [x] Upgrade/downgrade proration represented without provider leakage
+
+Grace is represented by the provider-reported paid-through window (grace
+lives inside the window the provider grants during dunning); activation
+lease refresh is a product-level choice under Permit's activation
+semantics; proration is computed at checkout and enters Commerce as
+ordinary payment facts. Additional channels begin only after measured
+product demand, per M4.
 
 ## M4 — Additional channels
 

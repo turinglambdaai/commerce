@@ -384,29 +384,40 @@ SQL
                                         #:now 200))
         (check-equal? (issuance-outbox-item-idempotency-key second-claim)
                       "mock/ord_002/grant")
-        (for ([entitlement-id (list "ent-001" "ent-002")])
-          (check-exn
-           (lambda (failure)
-             (and (exn:fail:commerce? failure)
-                  (eq? (exn:fail:commerce-code failure)
-                       'entitlement-lineage-conflict)))
-           (lambda ()
-             (apply-completion
-              storage second-claim
-              (grant-completion-arguments
-               #:entitlement-id entitlement-id
-               #:credential-id "cred-002"
-               #:recorded-at 210)))))
+        ;; A different entitlement id for the same identity still conflicts;
+        ;; a grant successor over the same lineage is a renewal and appends.
+        (check-exn
+         (lambda (failure)
+           (and (exn:fail:commerce? failure)
+                (eq? (exn:fail:commerce-code failure)
+                     'entitlement-lineage-conflict)))
+         (lambda ()
+           (apply-completion
+            storage second-claim
+            (grant-completion-arguments
+             #:entitlement-id "ent-other"
+             #:credential-id "cred-002"
+             #:recorded-at 210))))
+        (define renewal
+          (apply-completion
+           storage second-claim
+           (grant-completion-arguments
+            #:credential-id "cred-002"
+            #:recorded-at 210)))
+        (check-equal?
+         (entitlement-revision-revision
+          (issuance-completion-revision renewal))
+         1)
         (storage-close storage)
         (check-equal? (database-count path "commerce_entitlement_lineage") 1)
-        (check-equal? (database-count path "commerce_entitlement_revision") 1)
+        (check-equal? (database-count path "commerce_entitlement_revision") 2)
         (define connection
           (sqlite3-connect #:database path #:mode 'read-only))
         (check-equal?
          (query-value
           connection
           "SELECT status FROM commerce_issuance_outbox WHERE id = 2")
-         "processing")
+         "completed")
         (disconnect connection))))))
 
 (test-case "a withdrawal appends exactly one successor revision"

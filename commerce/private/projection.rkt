@@ -37,7 +37,7 @@
    (payment-event-offer-id event)
    (payment-event-subject-id event)
    (payment-event-amount event)
-   #f #f #f #f))
+   #f #f #f #f #f))
 
 (define (make-intent event action)
   (rights-intent
@@ -46,6 +46,21 @@
            (payment-event-order-id event)
            action)
    action
+   (payment-event-provider event)
+   (payment-event-order-id event)
+   (payment-event-offer-id event)
+   (payment-event-subject-id event)
+   (payment-event-occurred-at event)))
+
+;; A renewal intent is idempotent per paid-through moment, never per
+;; delivery, so a redelivered renewal can never double-extend a window.
+(define (make-renewal-intent event paid-through)
+  (rights-intent
+   (format "~a/~a/renewal/~a"
+           (payment-event-provider event)
+           (payment-event-order-id event)
+           paid-through)
+   'grant
    (payment-event-provider event)
    (payment-event-order-id event)
    (payment-event-offer-id event)
@@ -65,6 +80,27 @@
   (match (payment-event-kind event)
     ['payment-succeeded
      (cond
+       [(payment-event-paid-through event)
+        ;; A subscription fact: the projection advances to the reported
+        ;; paid-through window and emits one idempotent renewal intent per
+        ;; new window. Late renewals never shrink the window.
+        (define paid-through (payment-event-paid-through event))
+        (define previous-through
+          (order-projection-paid-through base-order))
+        (cond
+          [(and previous-through (<= paid-through previous-through))
+           (values
+            (struct-copy order-projection base-order
+                         [paid? #t]
+                         [paid-at (payment-event-occurred-at event)])
+            '())]
+          [else
+           (values
+            (struct-copy order-projection base-order
+                         [paid? #t]
+                         [paid-at (payment-event-occurred-at event)]
+                         [paid-through paid-through])
+            (list (make-renewal-intent event paid-through)))])]
        [(order-projection-paid? base-order)
         (values base-order '())]
        [(order-projection-refunded? base-order)

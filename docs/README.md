@@ -48,6 +48,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0011: One-time claim delivery](decisions/0011-claim-delivery.md)
 - [ADR-0012: Operator replay surface](decisions/0012-operator-replay-surface.md)
 - [ADR-0013: Structured, redacted-by-construction logs](decisions/0013-structured-logs.md)
+- [ADR-0014: Subscription paid-through semantics](decisions/0014-subscription-semantics.md)
 
 ## Source entry points
 

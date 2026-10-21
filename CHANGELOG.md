@@ -6,6 +6,15 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add subscription semantics on SQLite schema v5: the canonical payment
+  event carries the provider-reported paid-through window; the projection
+  advances to that window and emits one idempotently keyed renewal intent
+  per new window (late events never shrink it); the Permit mapping gains
+  the renew action and an explicit use-expiry so renewals lapse at the
+  paid window and subscription cancellations expire at period end; the
+  worker distinguishes renewals from second one-time purchases by the
+  order projection and still refuses second one-time grants before
+  signing. v1-v4 databases migrate in place.
 - Add operational evidence tooling: `snapshot-commerce-database!` writes a
   consistent SQLite copy via VACUUM INTO while the service runs,
   `verify-commerce-backup` rehearses restores by checking integrity,

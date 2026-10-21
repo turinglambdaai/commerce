@@ -70,11 +70,11 @@
 ;; events that have already crossed a provider-native authentication boundary.
 (struct payment-event
   (provider event-id payload-digest kind order-id offer-id subject-id amount
-            occurred-at)
+            occurred-at paid-through)
   #:transparent
   #:guard
   (lambda (provider event-id payload-digest kind order-id offer-id subject-id
-                    amount occurred-at who)
+                    amount occurred-at paid-through who)
     (unless (memq kind '(payment-succeeded payment-refunded))
       (raise-argument-error
        who
@@ -89,11 +89,16 @@
      (guard who stable-id? "stable kebab-case offer identifier" offer-id)
      (guard who opaque-id? "non-empty stable subject identifier" subject-id)
      (guard who money? "money?" amount)
-     (guard who exact-nonnegative-integer? "UTC epoch seconds" occurred-at))))
+     (guard who exact-nonnegative-integer? "UTC epoch seconds" occurred-at)
+     ;; #f for one-time facts; for a subscription payment, the epoch second
+     ;; through which the provider reports access paid.
+     (if paid-through
+         (guard who exact-nonnegative-integer? "UTC epoch seconds" paid-through)
+         #f))))
 
 (struct order-projection
   (provider order-id offer-id subject-id amount paid? refunded? paid-at
-            refunded-at)
+            refunded-at paid-through)
   #:transparent)
 
 (struct rights-intent

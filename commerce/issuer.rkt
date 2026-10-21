@@ -200,17 +200,30 @@
           (derive-entitlement-id issuer subject-type subject-id offer-id)))
     (define latest
       (storage-latest-entitlement-revision storage entitlement-id))
+    ;; The order projection carries the subscription window: a paid-through
+    ;; order turns grant intents into renewals and pins withdrawal expiry to
+    ;; the window (cancellation at period end) instead of issuance.
+    (define order
+      (storage-order-ref storage
+                         (issuance-outbox-item-provider item)
+                         (issuance-outbox-item-order-id item)))
+    (define paid-through (and order (order-projection-paid-through order)))
     ;; Deterministic refusals stop before any signing work.
     (cond
-      [(and (eq? action 'grant) lineage)
+      [(and (eq? action 'grant) lineage (not paid-through))
        (release-deterministic! worker storage item claim-now
                                'entitlement-lineage-conflict)]
       [(and (eq? action 'withdraw) (not lineage))
        (release-deterministic! worker storage item claim-now
                                'entitlement-lineage-required)]
       [else
-       (drive-issuance! worker storage item intent issuer subject-type
-                        entitlement-id latest claim-now)])))
+       (define effective-intent
+         (if (and (eq? action 'grant) lineage)
+             (struct-copy rights-intent intent [action 'renew])
+             intent))
+       (drive-issuance! worker storage item effective-intent issuer
+                        subject-type entitlement-id latest claim-now
+                        (and paid-through (rfc3339 paid-through)))])))
 
 (define (release-deterministic! worker storage item now error-code)
   (storage-release-issuance-work! storage item
@@ -232,7 +245,7 @@
   (released-result code))
 
 (define (drive-issuance! worker storage item intent issuer subject-type
-                         entitlement-id latest claim-now)
+                         entitlement-id latest claim-now use-expires-at)
   (define action (rights-intent-action intent))
   (define revision
     (if latest
@@ -243,7 +256,7 @@
   (define-values (issued-at issued-at-string)
     ((issuance-worker-clock worker)))
   (define previous
-    (and (eq? action 'withdraw)
+    (and latest
          (with-input-from-bytes
              (entitlement-revision-payload-bytes latest)
            read-json)))
@@ -255,7 +268,8 @@
      #:credential-id credential-id
      #:entitlement-id entitlement-id
      #:issued-at issued-at-string
-     #:previous previous))
+     #:previous previous
+     #:use-expires-at use-expires-at))
   ;; Signing happens outside the claim transaction. Ed25519 signing is
   ;; deterministic, so if this process dies after signing, the reclaiming
   ;; worker re-signs the same bytes and the recorded revision converges.
