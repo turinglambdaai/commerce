@@ -75,6 +75,11 @@
  storage-latest-entitlement-revision
  storage-claim-credential
  storage-mark-claim-notified
+ storage-outbox-scan
+ storage-order-journal
+ storage-order-outbox
+ storage-issued-credential-ref
+ storage-redrive-issuance-work!
  storage-close)
 
 (require racket/list
@@ -307,6 +312,60 @@
      "non-empty claim token up to 512 characters" token))
   (check-timestamp 'storage-mark-claim-notified now)
   ((commerce-storage-claim-notified storage) token now))
+
+;; Operator enumeration: outbox rows in stable id order, optionally filtered
+;; by status. Read-only, bounded by the caller.
+(define (storage-outbox-scan storage #:status [status #f])
+  (check-storage 'storage-outbox-scan storage)
+  (when status
+    (unless (member status '(pending processing completed))
+      (raise-argument-error
+       'storage-outbox-scan "(or/c 'pending 'processing 'completed #f)"
+       status)))
+  ((commerce-storage-outbox-scan storage) status))
+
+(define (storage-order-journal storage provider order-id)
+  (check-storage 'storage-order-journal storage)
+  (unless (stable-id? provider)
+    (raise-argument-error
+     'storage-order-journal "stable kebab-case provider identifier" provider))
+  (unless (opaque-id? order-id)
+    (raise-argument-error
+     'storage-order-journal
+     "non-empty opaque provider order identifier" order-id))
+  ((commerce-storage-order-journal storage) provider order-id))
+
+(define (storage-order-outbox storage provider order-id)
+  (check-storage 'storage-order-outbox storage)
+  (unless (stable-id? provider)
+    (raise-argument-error
+     'storage-order-outbox "stable kebab-case provider identifier" provider))
+  (unless (opaque-id? order-id)
+    (raise-argument-error
+     'storage-order-outbox
+     "non-empty opaque provider order identifier" order-id))
+  ((commerce-storage-order-outbox storage) provider order-id))
+
+(define (storage-issued-credential-ref storage issuance-outbox-id)
+  (check-storage 'storage-issued-credential-ref storage)
+  (unless (exact-nonnegative-integer? issuance-outbox-id)
+    (raise-argument-error
+     'storage-issued-credential-ref
+     "exact-nonnegative-integer?" issuance-outbox-id))
+  ((commerce-storage-issued-credential-lookup storage) issuance-outbox-id))
+
+;; Operator redrive: makes one pending row due immediately without touching
+;; its attempts counter. In-flight and completed work is never rewound; the
+;; journal remains the only replay source.
+(define (storage-redrive-issuance-work! storage idempotency-key #:now now)
+  (check-storage 'storage-redrive-issuance-work! storage)
+  (unless (and (string? idempotency-key)
+               (<= 1 (string-length idempotency-key) 512))
+    (raise-argument-error
+     'storage-redrive-issuance-work!
+     "non-empty idempotency key up to 512 characters" idempotency-key))
+  (check-timestamp 'storage-redrive-issuance-work! now)
+  ((commerce-storage-redrive storage) idempotency-key now))
 
 (define (storage-close storage)
   (check-storage 'storage-close storage)

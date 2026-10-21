@@ -17,7 +17,9 @@
   (journal-accept journal-lookup project-next order-lookup outbox-lookup
                   issuance-claim issuance-complete issuance-release
                   entitlement-lookup lineage-lookup revision-lookup
-                  latest-revision-lookup claim-lookup claim-notified close)
+                  latest-revision-lookup claim-lookup claim-notified
+                  outbox-scan order-journal order-outbox
+                  issued-credential-lookup redrive close)
   #:transparent)
 
 ;; disposition is 'projected or 'blocked. No pending journal row is represented

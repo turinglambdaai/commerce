@@ -3,12 +3,12 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-The next implementation handoff is the refund and operator replay flow:
-replay that always reuses the immutable journal through the normal
-projection path, an operator surface for the existing typed release codes
-(find, explain, re-drive bounded work), and honest documentation of what a
-withdrawal does and does not revoke. Do not edit projection rows, add an
-HTTP listener, or introduce subscription policy in the same change.
+The final M1 handoff is sandbox end-to-end evidence: one runnable flow
+that drives a verified payment through projection, deterministic issuance,
+and claim fulfillment against the real Pancake test environment with
+captured fixtures, plus the operator runbook for replay, redrive, and
+refund questions. Do not add production credentials, an HTTP listener, or
+subscription policy in the same change.
 
 ## M0 — Architecture foundation
 
@@ -28,8 +28,8 @@ HTTP listener, or introduce subscription policy in the same change.
 - [x] Active order verification before fulfillment
 - [x] Durable order projection and transactional issuance outbox
 - [x] Offer-to-Permit policy mapping
-- [ ] Permit credential issuance and one-time claim delivery
-- [ ] Refund and operator replay flow
+- [x] Permit credential issuance and one-time claim delivery
+- [x] Refund and operator replay flow
 - [ ] Sandbox end-to-end evidence and runbook
 
 ## M2 — Operational baseline

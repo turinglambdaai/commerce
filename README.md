@@ -28,7 +28,8 @@ version-pinned Offer-to-Permit snapshot mapping, an owner-safe issuance-outbox
 lease state machine with the transactional entitlement-lineage writer, the
 explicit Permit issuer worker that signs recorded bytes, records them as
 durable credential evidence, and hands the customer a one-time claim token,
-tests, and one runnable purchase walkthrough.
+the refund and operator replay surface, tests, and one runnable purchase
+walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -134,6 +135,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/pancake)   ; Pancake authentication and active order proof
 (require commerce/permit)    ; reviewed Offer policy to Permit snapshots
 (require commerce/issuer)    ; explicit issuer worker: claim, sign, deliver
+(require commerce/operator)  ; operator find/explain/redrive surface
 ```
 
 The default `commerce` facade does not expose provider secrets, raw webhook
@@ -179,11 +181,16 @@ Implemented now:
   ready/claimed/expired fulfillment states with idempotent notification
   marks, and typed claim fulfillment that never advances a lineage
   revision;
+- the refund and operator replay surface: redacted order explanations,
+  outbox enumeration, and bounded redrive that reuses the immutable
+  journal without ever editing a projection row or rewinding finished
+  work;
 - bilingual entry documentation, normative architecture, and CI gates.
 
 Not implemented yet:
 
 - webhook HTTP endpoints and delivery transports (email, portal);
+- the operator CLI wrapper over the operator surface;
 - ZPAY or app-store adapters;
 - refund/operator replay tooling beyond the durable lease primitives,
   subscriptions, seats, credential-claim portal, or an operator UI;

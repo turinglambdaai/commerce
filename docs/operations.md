@@ -86,9 +86,15 @@ The operator surface distinguishes:
 - credential signed but delivery unclaimed;
 - retry scheduled versus terminal operator action required.
 
-Every retry is bounded and observable. The current projector records
-deterministic poison work as a durable `blocked` marker with a typed reason;
-the operator replay command and broader quarantine workflow remain future work.
+Every retry is bounded and observable. The projector records deterministic
+poison work as a durable `blocked` marker with a typed reason; the broader
+quarantine workflow remains future work. `commerce/operator` exposes the
+headless replay vocabulary: `find-issuance-work` enumerates outbox rows,
+`explain-order` answers "what happened to this order" with redacted
+canonical events (raw provider bytes stay behind `commerce/journal`), and
+`redrive-issuance-work!` makes one pending row due without touching its
+attempts counter — it refuses to rewind in-flight or completed work. The
+CLI wrapper is future work; this module is its entire implementation.
 
 Claim delivery state is explicit: `ready` until the token is fulfilled,
 `claimed` once fulfilled, and expired once the fulfillment window passes.

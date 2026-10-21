@@ -6,6 +6,11 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add the `commerce/operator` replay surface: redacted order explanations
+  (projection, canonical event snapshots, outbox work, issued-credential
+  evidence), status-filtered outbox enumeration, and bounded redrive that
+  makes pending work due without touching attempts, rewinding in-flight or
+  completed work, or editing projection rows.
 - Add one-time claim delivery on SQLite schema v4: an append-only
   issued-credential record retaining the exact signed envelope bytes, a
   claim table storing only the SHA-256 digest of a random one-time token,

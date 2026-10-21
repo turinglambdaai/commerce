@@ -23,7 +23,8 @@ Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责�
 和一条完整的购买演示；订单投影与签发 outbox 已能同事务持久化，Offer policy
 已能生成版本固定、完整且经过 Permit 校验的权益快照，签发 outbox 也已具备
 owner 安全的租约状态机和事务型 lineage 写入器，显式 issuer worker 已能认领、
-签名、把签名信封落为持久凭证证据，并交给客户一枚一次性 claim token。
+签名、把签名信封落为持久凭证证据，交给客户一枚一次性 claim token，并提供
+退款与运营重放面。
 
 ```bash
 raco pkg install --auto --name commerce \
@@ -121,6 +122,7 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/pancake)   ; Pancake 鉴权与主动订单证明
 (require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
 (require commerce/issuer)    ; 显式签发 worker：认领、签名、交付
+(require commerce/operator)  ; 运营 find/explain/redrive 面
 ```
 
 默认的 `commerce` facade 不暴露渠道密钥、原始 Webhook 接收、网络监听、数据库
@@ -157,11 +159,14 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 - 一次性 claim 交付：只追加的签名凭证证据、仅存摘要的随机 claim token、
   ready/claimed/expired 显式交付状态与幂等通知标记，以及永不推进 lineage
   revision 的类型化 claim 兑换；
+- 退款与运营重放面：脱敏的订单解释、outbox 枚举，以及只复用不可变
+  journal、绝不改投影行、绝不回退已完成工作的有界 redrive；
 - 双语入口文档、规范架构与 CI 门禁。
 
 尚未实现：
 
 - Webhook HTTP 端点与交付渠道（邮件、门户）；
+- 运营 CLI（运营面的薄封装）；
 - ZPAY 或应用商店 adapter；
 - 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；
 - 生产部署或任何“已通过支付渠道认证”的声明。

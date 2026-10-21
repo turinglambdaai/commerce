@@ -528,6 +528,37 @@ bytes and key id are supplied, the completion transaction also records the
 issued credential; a claim token and expiry add its one-time fulfillment
 claim. Omitting them records issuance evidence without delivery, as before.
 
+@section{Operator replay surface}
+
+Server processes explicitly require @filepath{commerce/operator.rkt}. The
+surface answers operator questions without exposing raw provider bytes;
+deep journal payload access stays behind @filepath{commerce/journal.rkt}.
+
+@verbatim{
+(find-issuance-work storage [#:status status])
+  -> (listof issuance-outbox-item?)
+
+(explain-order storage provider order-id)
+  -> order-explanation?
+}
+
+Enumeration is read-only and stable by id. The explanation carries the
+order projection, the canonical event snapshots (never raw provider
+payloads), the order's outbox work, and its issued-credential records if
+any.
+
+@verbatim{
+(redrive-issuance-work! storage idempotency-key #:now now)
+  -> issuance-outbox-item?
+}
+
+Makes one @tt{'pending} row due immediately without touching its attempts
+counter — the bounded answer to transient failures and short backoffs. It
+refuses to rewind in-flight work (@tt{'lease-not-held}) or completed work
+(@tt{'work-already-completed}), and unknown keys fail with
+@tt{'unknown-issuance-work}. Replay always reuses the immutable journal
+through the normal projection path; no operation edits a projection row.
+
 @section{First purchase}
 
 @verbatim{

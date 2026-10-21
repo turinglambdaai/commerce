@@ -96,6 +96,49 @@ SQL
    "SELECT " revision-columns-sql
    " FROM commerce_entitlement_revision WHERE issuance_outbox_id = ?"))
 
+(define select-outbox-scan-sql
+  #<<SQL
+SELECT id, idempotency_key, source_journal_sequence, action, provider,
+       order_id, offer_id, subject_id, occurred_at, status, attempts,
+       available_at, lease_owner, lease_expires_at, last_error_code,
+       created_at, updated_at, completed_at
+FROM commerce_issuance_outbox
+ORDER BY id
+SQL
+  )
+
+(define select-order-journal-sql
+  #<<SQL
+SELECT sequence, provider, event_id, raw_payload, payload_digest, event_kind,
+       order_id, offer_id, subject_id, currency, amount_minor_units,
+       occurred_at, received_at
+FROM commerce_event_journal
+WHERE provider = ? AND order_id = ?
+ORDER BY sequence
+SQL
+  )
+
+(define select-order-outbox-sql
+  #<<SQL
+SELECT id, idempotency_key, source_journal_sequence, action, provider,
+       order_id, offer_id, subject_id, occurred_at, status, attempts,
+       available_at, lease_owner, lease_expires_at, last_error_code,
+       created_at, updated_at, completed_at
+FROM commerce_issuance_outbox
+WHERE provider = ? AND order_id = ?
+ORDER BY id
+SQL
+  )
+
+(define select-issued-credential-sql
+  #<<SQL
+SELECT id, issuance_outbox_id, entitlement_id, revision, credential_id,
+       key_id, envelope_bytes, created_at
+FROM commerce_issued_credential
+WHERE issuance_outbox_id = ?
+SQL
+  )
+
 (define select-due-work-sql
   #<<SQL
 SELECT id, idempotency_key
@@ -207,6 +250,19 @@ SQL
 (define (lookup-revision connection entitlement-id revision)
   (row->revision
    (query-maybe-row connection select-revision-sql entitlement-id revision)))
+
+(define (lookup-issued-credential connection issuance-outbox-id)
+  (define row
+    (query-maybe-row
+     connection select-issued-credential-sql issuance-outbox-id))
+  (and row
+       (match-let ([(vector id outbox-id entitlement-id revision
+                            credential-id envelope-key-id envelope-bytes
+                            created-at)
+                    row])
+         (issued-credential-record
+          id outbox-id entitlement-id revision credential-id envelope-key-id
+          (bytes->immutable-bytes envelope-bytes) created-at))))
 
 (define (record-content=? record payload event)
   (and (equal? (journal-record-payload record) payload)
@@ -1121,6 +1177,77 @@ SQL
            now now claim-id)]))
      #:option 'immediate))
 
+  ;; Operator scan: the outbox rows in stable id order, optionally filtered
+  ;; by status. Enumeration is read-only and exposes workflow state only.
+  (define (outbox-scan status)
+    (define rows
+      (query-rows connection select-outbox-scan-sql))
+    (for/list ([row (in-list rows)]
+               #:when (or (not status)
+                          (string=? (vector-ref row 9)
+                                    (symbol->string status))))
+      (row->outbox row)))
+
+  (define (order-journal provider order-id)
+    (for/list ([row (in-list
+                     (query-rows connection select-order-journal-sql
+                                 provider order-id))])
+      (row->record row)))
+
+  (define (order-outbox provider order-id)
+    (for/list ([row (in-list
+                     (query-rows connection select-order-outbox-sql
+                                 provider order-id))])
+      (row->outbox row)))
+
+  (define (issued-credential-ref issuance-outbox-id)
+    (check-open)
+    (check-sqlite-integer 'issuance-outbox-id issuance-outbox-id)
+    (lookup-issued-credential connection issuance-outbox-id))
+
+  ;; Redrive makes one pending row due immediately without touching its
+  ;; attempts counter. In-flight and completed work is never rewound.
+  (define (redrive-work idempotency-key now)
+    (check-sqlite-integer 'now now)
+    (call-with-transaction
+     connection
+     (lambda ()
+       (define row
+         (query-maybe-row
+          connection
+          "SELECT id, status FROM commerce_issuance_outbox WHERE idempotency_key = ?"
+          idempotency-key))
+       (cond
+         [(not row)
+          (raise-commerce
+           'unknown-issuance-work
+           "issuance redrive references unknown outbox work"
+           (hash 'idempotency-key idempotency-key))]
+         [else
+          (match-define (vector id status) row)
+          (cond
+            [(string=? status "processing")
+             (raise-commerce
+              'lease-not-held
+              "issuance redrive cannot rewind in-flight work"
+              (hash 'idempotency-key idempotency-key 'outbox-id id))]
+            [(string=? status "completed")
+             (raise-commerce
+              'work-already-completed
+              "issuance redrive cannot rewind completed work"
+              (hash 'idempotency-key idempotency-key 'outbox-id id))]
+            [else
+             (query-exec
+              connection
+              #<<SQL
+UPDATE commerce_issuance_outbox
+SET available_at = ?, updated_at = ?
+WHERE id = ? AND status = 'pending'
+SQL
+              now now id)
+             (lookup-outbox connection idempotency-key)])]))
+     #:option 'immediate))
+
   (define (entitlement-ref entitlement-id)
     (check-open)
     (lookup-lineage connection entitlement-id))
@@ -1153,4 +1280,5 @@ SQL
    claim-work complete-work release-work
    entitlement-ref lineage-ref revision-ref latest-revision
    claim-credential mark-claim-notified
+   outbox-scan order-journal order-outbox issued-credential-ref redrive-work
    close))
