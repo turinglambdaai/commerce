@@ -15,7 +15,8 @@
 ;; semaphore and closes the store.
 
 (module+ main
-  (require commerce/health
+  (require commerce
+           commerce/health
            commerce/issuer
            commerce/pancake
            commerce/permit
@@ -163,4 +164,4 @@
   (http-stop)
   (kill-thread worker-thread)
   (storage-close storage)
-  (displayln "commerce service: stopped")))
+  (displayln "commerce service: stopped"))
