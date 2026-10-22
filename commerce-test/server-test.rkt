@@ -225,6 +225,18 @@
         (storage-order-ref storage "pancake" "ORD_srv_001"))
        (storage-close storage))))
 
+  (test-case "readyz renders the readiness snapshot"
+    (call-with-endpoint
+     (lambda (storage endpoint path)
+       (define-values (status body)
+         (handle-readyz endpoint))
+       (check-eq? status 200)
+       (define snapshot (parse-json body))
+       (check-equal? (hash-ref snapshot 'schema-version) 7)
+       (check-equal? (hash-ref snapshot 'journal-unprojected) 0)
+       (check-equal? (hash-ref snapshot 'warnings) '())
+       (storage-close storage))))
+
   (test-case "the claim portal fulfills once and refuses reuse"
     (call-with-endpoint
      (lambda (storage endpoint path)
@@ -282,7 +294,7 @@
          (handle-claim-post endpoint "no-such-token"))
        (check-eq? missing-status 404)
        (check-false (hash-ref (parse-json missing-payload) 'fulfilled))
-        (storage-close storage))))
+       (storage-close storage))))
 
   (test-case "unknown checkout bindings are 404 without journaling"
     (call-with-endpoint
@@ -296,6 +308,4 @@
        (check-eq? status 404)
        (check-false (hash-ref (parse-json payload) 'accepted))
        (storage-close storage))))
-
-
 )

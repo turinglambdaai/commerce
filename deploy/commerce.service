@@ -1,0 +1,49 @@
+[Unit]
+Description=Commerce service (Pancake webhook edge, projector, issuer worker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=commerce
+Group=commerce
+WorkingDirectory=/var/lib/commerce
+ExecStart=/usr/bin/racket /opt/commerce/examples/service.rkt
+
+# Database and port
+Environment=COMMERCE_DB_PATH=/var/lib/commerce/commerce.sqlite
+Environment=COMMERCE_PORT=8080
+Environment=COMMERCE_LISTEN_IP=127.0.0.1
+Environment=COMMERCE_POLL_SECONDS=2
+# The service itself is environment-locked: test keys cannot sign what
+# production expects and vice versa.
+Environment=COMMERCE_ENVIRONMENT=test
+Environment=COMMERCE_ISSUER=com.example
+
+# Permit signing trust domain (files injected by provisioning, mode 0600)
+Environment=PERMIT_KEY_ID=key-2026
+Environment=PERMIT_PRIVATE_KEY_PATH=/etc/commerce/permit-private.pem
+Environment=PERMIT_TRUST_STORE_PATH=/etc/commerce/trust-store.json
+
+# Pancake merchant trust domain (separate rotation, docs/security.md)
+Environment=PANCAKE_MERCHANT_ID=MER_your_merchant_id
+Environment=PANCAKE_MERCHANT_KEY_PATH=/etc/commerce/pancake-merchant.pem
+Environment=PANCAKE_WEBHOOK_TEST_KEY_PATH=/etc/commerce/pancake-test-public.pem
+Environment=PANCAKE_WEBHOOK_PRODUCTION_KEY_PATH=/etc/commerce/pancake-production-public.pem
+
+Restart=on-failure
+RestartSec=5
+
+# Hardening: the only writable path is the database directory. Secrets
+# are read once at startup.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/commerce
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

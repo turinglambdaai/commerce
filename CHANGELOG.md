@@ -6,6 +6,14 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add the deployment assembly: `examples/service.rkt` (one process
+  running the HTTP edge, projector, and issuer worker over one SQLite
+  store, environment-configured with file-injected secrets), a `GET
+  /readyz` readiness endpoint rendering the health snapshot with typed
+  warnings (503 when an operator is needed), and `deploy/` runners — a
+  hardened systemd unit and a Docker image with a `/data` volume.
+  Termination is crash-safe by design; TLS, rate limiting, and log
+  shipping stay external (ADR-0018).
 - Add operator audit, claim reissue, the claim portal, and provider
   reconciliation on SQLite schema v7: an append-only audit table
   recording action/operator/reason/subject for every manual action; a

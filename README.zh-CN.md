@@ -197,6 +197,13 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 下一条受控纵切是退款与运营重放流程，见 [ROADMAP.md](ROADMAP.md)。缺口
 保持公开，避免把架构完成误当成生产就绪。
 
+## 部署
+
+一个进程装配整个服务:HTTP 边界、投影器与 issuer worker,共用一个
+SQLite 存储。`examples/service.rkt` 是规范装配;`deploy/` 提供加固的
+systemd unit 与 Docker 镜像,`deploy/README.md` 完整说明配置、密钥与
+上线前清单。`/readyz` 暴露就绪快照。终止即崩溃安全,重启自动收敛。
+
 ## 开发
 
 ```bash

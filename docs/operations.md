@@ -138,6 +138,16 @@ event. Merchant authentication, query rejection, not-found, malformed response,
 and semantic mismatch require configuration repair or operator review rather
 than an immediate tight loop.
 
+## Deployment
+
+The canonical assembly (`examples/service.rkt`, packaged runners in
+`deploy/`) runs the HTTP edge, the projector, and the issuer worker in
+one process over one SQLite store, configured entirely through the
+environment with secrets injected as file paths. `/readyz` renders the
+readiness snapshot for load balancers; 503 means typed warnings need an
+operator. Termination is crash-safe by design — restart re-claims
+expired leases and re-projects from the immutable journal.
+
 ## Webhook endpoint
 
 `commerce/server` exposes one route that authenticates the exact request

@@ -232,6 +232,15 @@ The next bounded slice is the refund and operator replay flow, as
 described in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so
 architecture does not get mistaken for production readiness.
 
+## Deployment
+
+One process assembles the whole service: HTTP edge, projector, and
+issuer worker over one SQLite store. `examples/service.rkt` is the
+canonical assembly; `deploy/` ships a hardened systemd unit and a
+Docker image, and `deploy/README.md` walks through configuration,
+secrets, and the pre-production checklist. `/readyz` renders the
+readiness snapshot. Termination is crash-safe by design.
+
 ## Development
 
 ```bash

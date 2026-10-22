@@ -5,12 +5,14 @@
  make-webhook-endpoint
  handle-webhook-post
  handle-claim-post
+ handle-readyz
  serve-webhook-endpoint)
 
 (require json
          net/url
          racket/list
          (only-in permit/envelope envelope->jsexpr read-envelope)
+         "health.rkt"
          web-server/http
          web-server/servlet-env
          "journal.rkt"
@@ -141,6 +143,25 @@
   (raise
    (exn:fail:commerce message (current-continuation-marks) code data)))
 
+;; Readiness probe: the read-only health snapshot rendered as JSON.
+;; Registers as a cheap GET for load balancers and supervisors.
+(define (handle-readyz endpoint)
+  (define report
+    (health-report (webhook-endpoint-storage endpoint)
+                   #:now (current-seconds)))
+  (define snapshot (health-status-readiness report))
+  (http-error
+   (if (null? (health-status-warnings report)) 200 503)
+   (hash 'schema-version (readiness-schema-version snapshot)
+         'journal-unprojected (readiness-journal-unprojected snapshot)
+         'projection-blocked (readiness-projection-blocked snapshot)
+         'work-pending (readiness-work-pending snapshot)
+         'work-processing (readiness-work-processing snapshot)
+         'work-stale-lease (readiness-work-stale-lease snapshot)
+         'claim-window-passed (readiness-claim-window-passed snapshot)
+         'warnings (map health-warning-code
+                        (health-status-warnings report)))))
+
 ;; Claim portal handling: the customer's one-time token in, the exact
 ;; signed Permit envelope out. Token presence is the only authorization;
 ;; wrong, reused, and expired tokens fail typed and mutate nothing.
@@ -194,6 +215,7 @@
            [(regexp-match? #rx"/webhooks/pancake$" request-url)
             "/webhooks/pancake"]
            [(regexp-match? #rx"/claims$" request-url) "/claims"]
+           [(regexp-match? #rx"/readyz$" request-url) "/readyz"]
            [else request-url]))
        (cond
          [(equal? path "/webhooks/pancake")
@@ -203,6 +225,9 @@
             (signature-header-value (request-headers/raw request)))
           (define-values (status body)
             (handle-webhook-post endpoint raw signature))
+          (json-response status body)]
+         [(equal? path "/readyz")
+          (define-values (status body) (handle-readyz endpoint))
           (json-response status body)]
          [(equal? path "/claims")
           (define token
@@ -223,7 +248,7 @@
      #:listen-ip listen-ip
      #:command-line? #f
      #:servlet-path "/webhooks/pancake"
-     #:servlet-regexp #rx"^/webhooks/pancake$|^/claims$"))
+     #:servlet-regexp #rx"^/webhooks/pancake$|^/claims$|^/readyz$"))
   (lambda ()
     (custodian-shutdown-all endpoint-custodian)))
 

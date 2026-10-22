@@ -31,6 +31,8 @@ operations. Do not duplicate a rule across several guides.
   backup/restore, and observability requirements.
 - [Runbook](runbook.md) — the operator's question-by-question answers with
   the runnable end-to-end journey.
+- [Deploying](../deploy/README.md) — configuration, systemd, and Docker
+  for the canonical service assembly.
 - [Roadmap](../ROADMAP.md) — bounded implementation milestones.
 
 ## Decisions
@@ -52,6 +54,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0015: HTTP webhook edge](decisions/0015-http-webhook-edge.md)
 - [ADR-0016: Operator audit, claim reissue, and the claim portal](decisions/0016-operator-audit-and-reissue.md)
 - [ADR-0017: Provider reconciliation](decisions/0017-provider-reconciliation.md)
+- [ADR-0018: Deployment assembly](decisions/0018-deployment-assembly.md)
 
 ## Source entry points
 
