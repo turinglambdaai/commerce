@@ -3,10 +3,10 @@
 Commerce advances through complete vertical slices. A milestone is not complete
 until code, tests, operator evidence, and user documentation agree.
 
-M1-M3 and the operational baseline are complete, including the HTTP
-edge, claim portal, operator audit with reissue, and provider
-reconciliation. Every remaining gap is gated on something outside this
-repository: live sandbox credentials, provider API contracts for
+M1-M3 have implemented protocol and local/fixture surfaces, including the
+HTTP edge, claim portal, operator audit with reissue, and provider
+reconciliation. This is not a claim of live provider or production validation.
+Remaining external release gates include: live sandbox credentials, provider API contracts for
 checkout creation and additional channels (ZPAY, app stores), and
 delivery transports. Those open on measured demand; keep the honest-gap
 lists in both READMEs current until then.
@@ -31,7 +31,8 @@ lists in both READMEs current until then.
 - [x] Offer-to-Permit policy mapping
 - [x] Permit credential issuance and one-time claim delivery
 - [x] Refund and operator replay flow
-- [x] Sandbox end-to-end evidence and runbook
+- [x] Local/fixture end-to-end journey and runbook
+- [ ] Live provider sandbox checkout-to-claim evidence
 
 ## M2 — Operational baseline
 
@@ -68,3 +69,16 @@ Additional channels begin only after measured product demand. Capability
 differences remain explicit; Commerce will not pretend every provider supports
 subscriptions, partial refunds, or the same customer identity model.
 
+
+## Next integration handoff
+
+Use gptp-studio as the first commercial canary, continuing issue #1 / PR #2
+for payment-evidence-derived update duration. Do not edit that active writer's
+policy files in a second slice. After it lands, pin the policy and Permit
+version, capture authenticated live order evidence with secrets redacted, and
+prove duplicate delivery, delayed retry, claim reissue, offline import,
+maintenance-window eligibility, refund disposition and backup restore.
+Record the exact provider mode, product/service SHAs, commands and operator
+evidence in the existing runbook/integration record. A fixture journey must
+never be labelled a live sandbox transaction. Missing credentials remain an
+explicit gate; architecture or a green unit suite cannot satisfy it.
