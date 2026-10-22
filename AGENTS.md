@@ -118,3 +118,8 @@ contains code, tests, the canonical documentation update, operational evidence,
 and no uncommitted files. Commit and push all completed work; `main` is the
 cross-device source of truth.
 
+## 组合定位（Portfolio placement）
+
+- 轨道与授权：基础设施（商业编排层）；授权形态：Apache-2.0；商业归属：全开源。
+- 组合归属唯一权威：[PORTFOLIO.md](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)（turinglambdaai.github.io 仓库）。改归属/授权先改权威档，再同步本节。
+- 纪律：价格只进本仓 `PRICING.md`，且收费开始时才发布；README 与产品站不做价格预告。
