@@ -184,18 +184,20 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
   与运营手册（[docs/runbook.md](docs/runbook.md)）；
 - 双语入口文档、规范架构与 CI 门禁。
 
-尚未实现：
+仍需外部集成与发布证据：
 
-- 交付渠道（邮件、门户）、真实沙箱凭据（runbook 记录了演练步骤）、
-  面向渠道 API 的 checkout 创建（binding 已可经 storage 记录，checkout
-  界面属产品侧）；
-- ZPAY、应用商店等额外渠道——按路线图以真实产品需求为门控；
-- ZPAY 或应用商店 adapter；
-- 租约原语之外的退款/运营重放工具、订阅、席位、凭证领取门户或运营后台；
-- 生产部署或任何“已通过支付渠道认证”的声明。
+- 真实渠道沙箱凭据，以及 checkout 到领取凭证的完整证据；
+- 面向渠道 API 的 checkout 创建（持久 binding 已实现；checkout UI 属产品侧）；
+- 邮件等外发交付渠道（HTTP 凭证领取门户已实现）；
+- ZPAY、应用商店等 adapter，仅按真实产品需求引入；
+- 图形运营后台，仅在现有运营 CLI 不足时建设；
+- 生产部署和运行 canary。这里不声明支付渠道认证或生产就绪。
 
-下一条受控纵切是退款与运营重放流程，见 [ROADMAP.md](ROADMAP.md)。缺口
-保持公开，避免把架构完成误当成生产就绪。
+上述 HTTP 边界、领取门户、运营重放/审计、订阅投影已是实现面，不再列为 TODO；
+本地/fixture 覆盖与真实渠道集成证据分别记录。下一条受控集成为 gptp-studio 的
+一次性购买 offer 与签名更新窗，沿用 [issue #1](https://github.com/turinglambdaai/commerce/issues/1)
+及 [PR #2](https://github.com/turinglambdaai/commerce/pull/2)，不重复启动活动中的切片。
+顺序与发布门禁以 [ROADMAP.md](ROADMAP.md) 为准。
 
 ## 部署
 
@@ -222,4 +224,3 @@ raco setup --check-pkg-deps commerce
 ## 许可证
 
 Apache-2.0，见 [LICENSE](LICENSE)。
-

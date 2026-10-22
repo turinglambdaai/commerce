@@ -20,7 +20,7 @@ rights. Commerce owns the durable orchestration between them.
 
 ## Quick start
 
-The current release provides the pure event core, replay/conflict protection,
+The current implementation provides the pure event core, replay/conflict protection,
 order projections, rights intents, a provider boundary, a durable SQLite raw
 event journal, exact-byte Pancake webhook authentication, active Pancake
 one-time-order verification, transactional durable projection/outbox storage,
@@ -218,19 +218,25 @@ Implemented now:
   ([docs/runbook.md](docs/runbook.md));
 - bilingual entry documentation, normative architecture, and CI gates.
 
-Not implemented yet:
+Remaining external integration and release gates:
 
-- webhook HTTP endpoints and delivery transports (email, portal);
-- delivery transports (email, portal), and live sandbox credentials;
-- ZPAY, app-store, and other additional channels — gated on measured
-  product demand per the roadmap;
-- refund/operator replay tooling beyond the durable lease primitives,
-  subscriptions, seats, credential-claim portal, or an operator UI;
-- production deployment or a claim of payment-provider certification.
+- live provider sandbox credentials and captured checkout-to-claim evidence;
+- provider-facing checkout creation (durable bindings already exist; checkout
+  UI belongs to the product);
+- outbound delivery such as email (the HTTP claim portal already exists);
+- ZPAY, app-store and other adapters, only after measured product demand;
+- a graphical operator UI, if operation through the existing CLI proves
+  insufficient;
+- production deployment and operational canary evidence. No payment-provider
+  certification or production-readiness claim is made.
 
-The next bounded slice is the refund and operator replay flow, as
-described in [ROADMAP.md](ROADMAP.md). Honest gaps remain visible so
-architecture does not get mistaken for production readiness.
+The HTTP edge, claim portal, operator replay/audit and subscription projections
+listed above are implemented surfaces, not remaining TODOs. Their local/fixture
+coverage is distinct from a live provider integration. The next bounded
+integration is gptp-studio's one-time-purchase offer and signed maintenance
+window, coordinated in [issue #1](https://github.com/turinglambdaai/commerce/issues/1)
+and [PR #2](https://github.com/turinglambdaai/commerce/pull/2). Do not duplicate
+that active slice. [ROADMAP.md](ROADMAP.md) owns sequencing and release gates.
 
 ## Deployment
 
