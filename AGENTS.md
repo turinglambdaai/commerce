@@ -118,11 +118,9 @@ contains code, tests, the canonical documentation update, operational evidence,
 and no uncommitted files. Commit and push all completed work; `main` is the
 cross-device source of truth.
 
-## 组合定位（Portfolio placement）
+## Portfolio placement
 
-- 轨道与授权：基础设施（商业编排层）；授权形态：Apache-2.0；商业归属：全开源。
-- 组合归属唯一权威：[PORTFOLIO.md](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)（turinglambdaai.github.io 仓库）。改归属/授权先改权威档，再同步本节。
-- 纪律：价格只进本仓 `PRICING.md`，且收费开始时才发布；README 与产品站不做价格预告。
+This is open-source infrastructure under the repository's existing LICENSE, not a product paywall or pricing authority. Portfolio decisions live in [PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md); product-specific commercial rules stay in the product repository.
 
 ## Product delivery coordination
 
@@ -130,3 +128,7 @@ The [family delivery standard](https://github.com/turinglambdaai/turinglambdaai.
 Keep the implementation queue in `ROADMAP.md` and preserve this library's domain
 boundary. Products own interaction meaning, commercial policy and user data;
 do not add those policies to a framework facade.
+
+## Documentation languages
+
+Default public entry points and technical references are English. Maintain complete Chinese README/getting-started user paths with reciprocal links; preserve commands, API names and protocol semantics. Update both languages when a public user path changes. Technical references remain one normative source; Chinese guides explain and link to them. Follow the [family language policy](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md). Historical internal notes need not all be translated.
