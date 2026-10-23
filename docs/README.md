@@ -79,3 +79,7 @@ operations. Do not duplicate a rule across several guides.
 | `commerce-test/` | behavior and invariant tests |
 | `examples/` | copyable newcomer paths |
 
+
+## Adoption and support
+
+[English guide](USING.md) · [简体中文](USING.zh-CN.md): fit, maturity, upgrade boundaries and support. This user path links to the existing canonical technical owners above.

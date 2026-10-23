@@ -1,5 +1,7 @@
 # 快速上手
 
+[English](getting-started.md) · **简体中文**
+
 本教程让第一次接触项目的人从一套空白 Racket 环境走到一笔可审计的购买状态
 转换。这里刻意使用 mock 边界：不需要注册账号、配置密钥、访问网络或真的付款。
 
@@ -184,3 +186,5 @@ raco setup --check-pkg-deps commerce
 确定性签名与一次性 claim 交付均已实现。退款/运营重放工具与真实 sandbox
 证据仍是 [ROADMAP.md](../ROADMAP.md) 中彼此独立的 M1 门禁。
 
+
+[升级、成熟度与支持](USING.zh-CN.md)。

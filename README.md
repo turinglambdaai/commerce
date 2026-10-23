@@ -18,6 +18,12 @@ rights. Commerce owns the durable orchestration between them.
 
 **Provider-neutral. Event-driven. Rights-first.**
 
+## Start here
+
+Use Commerce only when a product needs durable payment-to-rights orchestration. It is one headless service with explicit provider and Permit issuer boundaries; it is not a payment processor, merchant of record, identity system or proof of merchant eligibility.
+
+[Fit, maturity, upgrades and support](docs/USING.md) · [简体中文](docs/USING.zh-CN.md)
+
 ## Quick start
 
 The current implementation provides the pure event core, replay/conflict protection,
@@ -267,4 +273,3 @@ normative document update.
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
-

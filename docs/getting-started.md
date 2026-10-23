@@ -1,5 +1,7 @@
 # Getting started
 
+**English** · [简体中文](getting-started.zh-CN.md)
+
 This guide takes a new contributor from an empty Racket installation to one
 audited purchase transition. It uses the mock boundary deliberately: no account,
 secret, network access, or real payment is required.
@@ -196,3 +198,5 @@ and one-time claim delivery are implemented. Refund/operator replay tooling
 and live sandbox evidence remain separate M1 gates in
 [ROADMAP.md](../ROADMAP.md).
 
+
+[Upgrades, maturity and support](USING.md).
