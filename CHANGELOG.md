@@ -17,6 +17,14 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add the provider admission gate (ADR-0019): no adapter presents a
+  live checkout until an admission record is complete — approved
+  account scope, capability matrix (method × currency × transaction
+  type × amount bounds, every cell unknown without approved evidence),
+  verified checkout-creation and order-read contract paths, separately
+  staged costs, and typed refusal of offers outside the matrix.
+  Pancake and ZPAY are recorded as not admitted; fixture conformance is
+  explicitly not eligibility.
 - Add scenario-level recovery journeys (`commerce-test/recovery-test.rkt`)
   proving the four operator recovery routes at the fixture boundary: a
   delayed webhook, a duplicate callback, a lost browser return, and a

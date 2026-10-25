@@ -81,6 +81,18 @@ query API must support periodic reconciliation:
 - ingest missing facts through the same canonical path;
 - report mismatches without silently editing history.
 
+## Admission
+
+Fixtures and sandbox drills prove protocol conformance; they do not
+prove merchant eligibility. A provider adapter may present a live
+checkout only after its admission record is complete — approved account
+scope, capability matrix, verified contract paths, separately staged
+costs, and typed refusal behavior (ADR-0019). Offers outside the
+admitted matrix are rejected before a checkout is presented: a checkout
+a buyer cannot pay must never be offered, and nothing is repriced,
+converted, or split to fit. Current status: Pancake and ZPAY are not
+admitted; no approved merchant account exists.
+
 ## Provider-specific notes
 
 Pancake is the first production adapter because it supports individual
