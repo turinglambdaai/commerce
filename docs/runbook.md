@@ -78,6 +78,38 @@ keys fail with `unknown-issuance-work`. Bounded backoff plus observable
 attempts is the normal recovery path; redrive is for "the backoff is
 longer than the customer's patience" moments.
 
+## Recovery routes
+
+Every failure a customer hits has exactly one route back, and every
+route reuses the logical order — none of them asks the customer to pay
+again, and none of them treats a redirect or a repeat purchase attempt
+as payment evidence. `commerce-test/recovery-test.rkt` walks all four
+routes end to end at the fixture boundary; live checkout remains a
+separate launch gate (see the sandbox drill below).
+
+- **The webhook arrived late.** The journal is idempotent: a late
+  delivery follows the ordinary accept → project → issue path and
+  converges on one credential. Reconciliation may surface the gap first
+  as a `missing-webhook` difference; the late webhook closes it on
+  arrival, and the provider's redelivery is acknowledged as `replayed`.
+- **The callback was delivered twice.** An exact redelivery is
+  acknowledged as `replayed` without a second journal row, projection,
+  or outbox entry. Changed bytes under the same event id are refused as
+  `conflicting-replay` (HTTP 409) and must be investigated, never
+  overwritten.
+- **The browser return was lost.** If no webhook ever arrives,
+  reconciliation compares a signed provider order read with the empty
+  projection and reports `missing-webhook`. Reconciliation itself never
+  mutates; the one route back is provider redelivery of the webhook,
+  and the journal does the rest exactly once for the same logical
+  order and entitlement.
+- **The credential import failed.** If the claim was fulfilled but the
+  product could not import the bytes, the operator reissue path
+  (`storage-reissue-claim!`) appends a fresh one-time claim for the
+  SAME issued credential with a fresh token, recorded in the operator
+  audit table. The credential id and lineage revision never change;
+  the spent claim row stays as evidence.
+
 ## "I want a refund."
 
 A refund after payment emits one withdrawal intent whose issuance records

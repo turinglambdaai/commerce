@@ -17,6 +17,12 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add scenario-level recovery journeys (`commerce-test/recovery-test.rkt`)
+  proving the four operator recovery routes at the fixture boundary: a
+  delayed webhook, a duplicate callback, a lost browser return, and a
+  failed credential import. Each journey asserts the no-second-charge
+  invariants — one journal event, one outbox row, one credential, one
+  lineage revision — and the runbook names each route in the same words.
 - Add the deployment assembly: `examples/service.rkt` (one process
   running the HTTP edge, projector, and issuer worker over one SQLite
   store, environment-configured with file-injected secrets), a `GET
