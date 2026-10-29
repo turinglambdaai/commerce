@@ -6,9 +6,9 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
-- Keep the in-memory issuance worker opaque to Racket diagnostic printing;
-  test both display representations so accidental logging cannot serialize
-  its signing-key field. This is not a substitute for process-level key
+- Keep the in-memory issuance worker and the claim-token-bearing issuance
+  result opaque to Racket diagnostic printing; test both display
+  representations so accidental logging cannot serialize private fields. This is not a substitute for process-level key
   isolation, which remains a production security gate (issue #10).
 
 - Render every issued RFC 3339 timestamp in true UTC regardless of the
