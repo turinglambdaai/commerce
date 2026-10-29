@@ -5,8 +5,10 @@ Commerce ships as a Racket package with one role-selectable entrypoint,
 one SQLite store: `COMMERCE_ROLE=edge` handles webhooks and credential
 claims without reading Permit signing keys; `COMMERCE_ROLE=issuer` projects
 events and signs entitlements without starting an HTTP listener. The default
-`COMMERCE_ROLE=all` preserves the earlier combined walkthrough and is
-**not a key-isolated deployment**. See
+`COMMERCE_ROLE=all` preserves the earlier combined walkthrough in
+`COMMERCE_ENVIRONMENT=test` only; **production startup rejects combined
+mode**, even when it is the default. Explicitly select and provision both
+split roles for production. See
 [ADR-0020](../docs/decisions/0020-split-service-roles.md) for the remaining
 shared-database trust risk. TLS termination, rate limiting, and log shipping
 remain the reverse proxy/infrastructure's responsibility
@@ -19,7 +21,7 @@ once at startup (mode 0600, never committed).
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `COMMERCE_ROLE` | `all` (combined), `edge` (HTTP only), `issuer` (signing/projector only) | `all` for local examples |
+| `COMMERCE_ROLE` | `all` (test only), `edge` (HTTP only), `issuer` (signing/projector only) | `all` (refused in production) |
 | `COMMERCE_DB_PATH` | Shared SQLite store path (writable by both roles) | required |
 | `COMMERCE_PORT` / `COMMERCE_LISTEN_IP` | HTTP bind | 8080 / 127.0.0.1 |
 | `COMMERCE_POLL_SECONDS` | Worker loop poll interval | 2 |
