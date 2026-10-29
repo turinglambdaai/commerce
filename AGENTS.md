@@ -111,6 +111,26 @@ Every event-handling bug receives red/green tests covering all affected entry
 points. For persistence or serialization defects, inspect emitted artifacts or
 database rows rather than relying only on source matching.
 
+## Security disclosures and production release gates
+
+Before touching a signing, payment, or provider boundary, read
+[the security reporting policy](SECURITY.md) and the normative
+[security model](docs/security.md). Keep possible exploit reproductions
+private; ordinary issues and PRs must be synthetic and redacted.
+
+Use [the release evidence checklist](docs/release-checklist.md) to distinguish
+what is implemented from what is *independently validated*. In particular,
+separate OS roles do not remove the shared writable database risk (#10);
+passing fixture CI does not grant merchant approval (#5) or prove the first
+real payment-to-claim journey (#4). Never check off a production gate,
+represent a queued macOS job as a pass, initiate a real payment, or disclose
+a key merely to make a release report look complete.
+
+Follow [the PR handoff template](.github/PULL_REQUEST_TEMPLATE.md): record
+exact base/head SHAs, focused and matrix checks actually run, invariant and
+failure scenario, migration/rollback effects, and blockers. The next agent
+should be able to continue using repository state alone.
+
 ## Handoff standard
 
 Leave the repository understandable without chat history. A completed change
