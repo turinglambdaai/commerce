@@ -6,6 +6,12 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Keep the in-memory issuance worker and the claim-token-bearing issuance
+  result opaque to Racket diagnostic printing; test both display
+  representations so accidental logging cannot serialize private fields.
+  Process-level key isolation remains a separate production security gate
+  (issue #10).
+
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
   database from an operator command, with regression tests; update outdated
