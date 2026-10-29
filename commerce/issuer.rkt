@@ -36,8 +36,7 @@
 (struct issuance-worker
   (catalog issuer private-key key-id trust-store clock
            owner lease-seconds transient-backoff-seconds
-           operator-backoff-seconds claim-window-seconds)
-  )
+           operator-backoff-seconds claim-window-seconds))
 
 ;; disposition is 'completed, 'released, or 'lease-lost. A released result
 ;; names the typed error code that future operators will see on the outbox
