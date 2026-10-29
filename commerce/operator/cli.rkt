@@ -25,7 +25,8 @@
    "  raco commerce redrive <database> <idempotency-key>\n"))
 
 (define (fail-usage!)
-  (write-string (usage))
+  ;; Automation must be able to parse a refusal as reliably as a success.
+  (emit-json (hash 'error "invalid-arguments" 'usage (usage)))
   1)
 
 (define (open-database path)
@@ -129,7 +130,10 @@
 (define (run-commerce-cli! arguments)
   (match arguments
     [(vector "find" database) (command-find database #f)]
-    [(vector "find" database status) (command-find database status)]
+    [(vector "find" database status)
+     (if (member status '("pending" "processing" "completed"))
+         (command-find database status)
+         (fail-usage!))]
     [(vector "explain" database provider order-id)
      (command-explain database provider order-id)]
     [(vector "redrive" database key)
