@@ -72,13 +72,19 @@ subscriptions, partial refunds, or the same customer identity model.
 
 ## Next integration handoff
 
-Use gptp-studio as the first commercial canary, continuing issue #1 / PR #2
-for payment-evidence-derived update duration. Do not edit that active writer's
-policy files in a second slice. After it lands, pin the policy and Permit
-version, capture authenticated live order evidence with secrets redacted, and
-prove duplicate delivery, delayed retry, claim reissue, offline import,
-maintenance-window eligibility, refund disposition and backup restore.
-Record the exact provider mode, product/service SHAs, commands and operator
-evidence in the existing runbook/integration record. A fixture journey must
-never be labelled a live sandbox transaction. Missing credentials remain an
-explicit gate; architecture or a green unit suite cannot satisfy it.
+The gptp-studio payment-evidence-derived maintenance window was implemented
+in merged PR #2 (issue #1 is closed). Do not reopen the completed policy slice
+to substitute for live-product evidence. The remaining next milestone is an
+approved first commercial canary, blocked by provider admission (#5), a
+trustworthy signing-intent boundary (#10), and a live
+payment-to-claim/import/recovery drill (#4). Pin Commerce and Permit commits
+and the reviewed product policy before the drill.
+
+Capture authenticated provider order evidence with secrets redacted; prove
+duplicate delivery, delayed retry, claim reissue, offline import, maintenance-
+window eligibility, refund disposition and backup restore. Record the exact
+provider mode, product/service SHAs, commands and operator evidence outside
+public Git history, linking only redacted records. Follow
+[release evidence](docs/release-checklist.md). A fixture journey must never be
+labelled a live transaction; absent merchant approval and credentials remain
+explicit NO-GO gates.
