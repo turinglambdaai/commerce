@@ -78,9 +78,13 @@ No production private key or provider secret is committed, bundled, printed, or
 stored in ordinary configuration. Environment variables are acceptable only as
 a deployment injection mechanism, not as a long-term secret-management design.
 
-Permit signing should eventually run through a narrow signer interface so the
-Commerce web edge cannot read/export the raw key. Key identifiers and rotation
-state are recorded with every issuance.
+An `issuance-worker` is opaque to diagnostic formatting, which prevents an
+accidental printed worker from exposing its signing-key field. This does not
+isolate memory or permissions: the current deployment still loads the raw
+Permit signing key into the same process as the Commerce HTTP edge.
+Production signing should run through a narrow signer interface so the
+HTTP-facing process cannot read/export the raw key. Key identifiers and
+rotation state are recorded with every issuance.
 
 ## Customer identity
 
