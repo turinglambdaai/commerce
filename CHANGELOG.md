@@ -6,6 +6,12 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Correct outdated first-product roadmap and bilingual README claims: issue #1
+  and PR #2 are closed/merged, while merchant approval, production signer
+  authorization and live evidence remain open gates. Add a root confidential
+  security policy, PR/agent handoff template, auditable release checklist and
+  documentation links/tests; update a stale organization URL.
+
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
   database from an operator command, with regression tests; update outdated
