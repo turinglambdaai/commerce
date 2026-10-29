@@ -8,9 +8,11 @@
   (check-eq? (parse-service-role "edge") 'edge)
   (check-eq? (parse-service-role "issuer") 'issuer)
   (for ([role (in-list '(all edge issuer))])
-    (check-equal? (service-role-edge? role) (memq role '(all edge)) #:message
+    (check-equal? (service-role-edge? role)
+                  (if (memq role '(all edge)) #t #f)
                   "Only the edge/combined process may open a public listener")
-    (check-equal? (service-role-issuer? role) (memq role '(all issuer)) #:message
+    (check-equal? (service-role-issuer? role)
+                  (if (memq role '(all issuer)) #t #f)
                   "Only the issuer/combined process may load the Permit key")))
 
 (test-case "invalid role names and data fail before opening secrets"
