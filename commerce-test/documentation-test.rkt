@@ -55,3 +55,37 @@
    (string-contains? (file->string (build-path repository-root entry))
                      canonical-family-url)
    (format "~a must link the canonical family architecture" entry)))
+
+;; A repository handling payments and signing must expose an unambiguous
+;; confidential reporting path, a reproducible PR handoff, and a release gate
+;; which does not equate fixture CI with live merchant approval.
+(for ([entry '("SECURITY.md"
+               ".github/PULL_REQUEST_TEMPLATE.md"
+               "docs/release-checklist.md")])
+  (check-true
+   (file-exists? (build-path repository-root entry))
+   (format "missing security/release governance entry ~a" entry)))
+
+(for ([entry '("README.md" "README.zh-CN.md" "ROADMAP.md")])
+  (check-true
+   (string-contains? (file->string (build-path repository-root entry))
+                     "docs/release-checklist.md")
+   (format "~a must identify the verifiable release gates" entry)))
+
+(for ([entry '("README.md" "README.zh-CN.md" "CONTRIBUTING.md")])
+  (check-true
+   (string-contains? (file->string (build-path repository-root entry))
+                     "SECURITY.md")
+   (format "~a must link confidential security reporting" entry)))
+
+(check-true
+ (string-contains? (file->string
+                    (build-path repository-root "docs/README.md"))
+                   "release-checklist.md")
+ "documentation map must link the release evidence checklist")
+
+(check-true
+ (string-contains? (file->string
+                    (build-path repository-root "CONTRIBUTING.md"))
+                   ".github/PULL_REQUEST_TEMPLATE.md")
+ "contribution instructions must link the PR handoff template")
