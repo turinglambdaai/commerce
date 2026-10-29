@@ -52,6 +52,14 @@ signal handler is required for correctness.
 
 ## Docker
 
+The Dockerfile pins Permit to `ed32d0eec463665e470657e54d222a1b98148a1e`, the same revision as CI.
+The default Racket base image is a mutable tag suitable only for development.
+For a release, select and independently verify an image digest, then pass
+`--build-arg RACKET_IMAGE=racket/racket@sha256:<verified-digest>`.
+Record Commerce SHA, Permit SHA, Racket base image digest, produced image digest,
+and a tested rollback image in the deployment manifest. A missing base digest
+is still an explicit production release gate; it must not be guessed.
+
 ```bash
 docker build -t commerce-service -f deploy/Dockerfile .
 docker run -d --name commerce \

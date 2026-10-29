@@ -8,7 +8,7 @@
     "db-lib"
     "http-easy-lib"
     "web-server-lib"
-    ["permit" #:version "0.1"]))
+    ["permit" #:version "0.2"]))
 (define build-deps '("rackunit-lib" "racket-doc" "scribble-lib"))
 (define pkg-desc
   "Provider-neutral commerce orchestration for independent software")

@@ -13,13 +13,20 @@
 # Terminate: docker stop (SIGTERM). The store is crash-safe by design;
 # a restart re-claims expired leases and re-projects from the journal.
 
-FROM racket/racket:9.3
+# Build with --build-arg RACKET_IMAGE=racket/racket@sha256:<verified-digest>
+# for release. The tag default is a local-development convenience only.
+ARG RACKET_IMAGE=racket/racket:9.3
+FROM ${RACKET_IMAGE}
 
 WORKDIR /src
 
-# Dependency layer: Permit tracks its published main.
-RUN raco pkg install --auto --no-docs --name permit \
-      https://github.com/turinglambdaai/permit.git
+# Permit source is pinned to the same audited SHA as CI.
+ARG PERMIT_COMMIT=ed32d0eec463665e470657e54d222a1b98148a1e
+ADD https://github.com/turinglambdaai/permit/archive/${PERMIT_COMMIT}.tar.gz /tmp/permit-source.tar.gz
+RUN mkdir -p /tmp/permit-src \
+ && tar -xzf /tmp/permit-source.tar.gz --strip-components=1 -C /tmp/permit-src \
+ && raco pkg install --copy --auto --no-docs --name permit /tmp/permit-src \
+ && rm -rf /tmp/permit-src /tmp/permit-source.tar.gz
 
 # Package layer: install from the full source tree, compile the service.
 COPY info.rkt /src/info.rkt
