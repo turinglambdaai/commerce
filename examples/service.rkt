@@ -24,8 +24,8 @@
            commerce/server
            commerce/storage
            commerce/storage/sqlite
-           json
            permit/issuer
+           permit/trust
            racket/file
            racket/match
            racket/string)
@@ -87,10 +87,10 @@
 
   (define private-key
     (and issuer? (read-ed25519-private-key private-key-path)))
+  ;; The issuer's trust store is security-sensitive: Permit rejects duplicate
+  ;; JSON members, malformed scalars and trailing bytes before parsing keys.
   (define trust-store
-    (and issuer?
-         (jsexpr->trust-store
-          (with-input-from-file trust-store-path read-json))))
+    (and issuer? (read-trust-store trust-store-path)))
 
   ;; PLACEHOLDER catalog: replace with the product's reviewed,
   ;; version-pinned policies. Policy ids are immutable; a rights change
