@@ -39,7 +39,7 @@ jobs:
       - name: Install package
         run: raco pkg install --auto --no-docs --name commerce "${{ github.workspace }}"
       - name: Compile
-        run: raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt commerce/permit.rkt commerce/issuer.rkt commerce/operator.rkt commerce/health.rkt commerce/log.rkt commerce/server.rkt commerce-doc/scribblings/commerce.scrbl
+        run: raco make commerce/main.rkt commerce/provider.rkt commerce/journal.rkt commerce/storage.rkt commerce/storage/sqlite.rkt commerce/pancake.rkt commerce/permit.rkt commerce/issuer.rkt commerce/operator.rkt commerce/health.rkt commerce/log.rkt commerce/server.rkt commerce/private/service-role.rkt commerce-doc/scribblings/commerce.scrbl examples/service.rkt
       - name: Test
         run: raco test -p commerce
 

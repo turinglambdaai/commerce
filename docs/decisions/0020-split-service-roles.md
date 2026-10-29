@@ -1,0 +1,74 @@
+# ADR-0020: Split Commerce edge and issuer service roles
+
+Status: **accepted as an incremental hardening step; not the final trust boundary**
+
+## Problem
+
+The former example assembled the public HTTP listener, provider merchant
+credential, payment projector, and Permit private signing key in one process.
+Compromise of that HTTP-facing process therefore exposed an unrelated
+commercial signing secret. Signing and claim delivery remain distinct from
+webhook processing in the application model, but not in OS privileges.
+
+## Decision
+
+The service accepts `COMMERCE_ROLE=all|edge|issuer`. `all` retains the
+combined local demonstration. An edge-only process reads Pancake credentials
+and webhook verification keys, but never resolves `PERMIT_PRIVATE_KEY_PATH`,
+creates a Permit signer, or starts the issuance thread. An issuer-only process
+reads the Permit signing key and a pinned product policy catalog, runs the
+projector and outbox worker, and starts **no HTTP listener**. Both roles share
+one SQLite WAL database and honor the same environment and database path.
+
+Two different unprivileged OS identities, mutually inaccessible key files,
+separate environment configuration and systemd hardening are required to
+obtain actual process-level key confidentiality. Starting two processes
+under one account or running two root containers with shared secrets does not
+provide the intended isolation. The examples have no privileged key-export
+endpoint.
+
+## Security boundary and limitations
+
+This design narrows *key confidentiality exposure*, not signing authority.
+Both processes still have write access to the same database. A compromised
+edge with arbitrary database write access could forge payment journal,
+projection or outbox records, and thus trick the issuer into signing
+unauthorized rights. Database triggers and idempotency protect ordinary
+application mistakes, not arbitrary malicious SQL from a writable role.
+No claim of a fully isolated trustworthy signer is warranted.
+
+A subsequent milestone must require an independently authenticated,
+least-privilege signing-intent channel, or a durable verified evidence
+boundary in which the HTTP process cannot forge issuer-authorized work.
+Test attempted payment/order forgery, wrong issuer/key/environment, actor
+restarts, delayed or duplicate messages, and signer outage before claiming
+production signing separation.
+
+## Expected behavior
+
+- `edge`: requires provider/HTTP configuration and shared database;
+  **does not require or read any Permit private key path**.
+- `issuer`: requires Permit issuer, trust store, private key, policy catalog
+  and shared database; **does not require provider keys or bind HTTP**.
+- `all`: backward-compatible, suitable for mock/local walkthroughs; not
+  independently key-isolated.
+- A missing or invalid role fails closed on startup. No role is allowed to
+  silently fall back to `all` after invalid input.
+- Webhook acceptance remains durable before acknowledgements, and signing
+  stays asynchronous. A crashed issuer is restarted by the service manager.
+  An issuer restart reclaims expired outbox leases; clients and operators
+  must not issue another charge for an unknown entitlement outcome.
+
+## Verification and release gate
+
+Unit tests check role selection, invalid roles and forbidden role
+capabilities. CI compiles the role-selectable example on all supported
+Racket versions and OSes; a Docker build exercises packaging. These checks
+do not prove OS permission isolation or live merchant behavior. Before
+any production cutover, inspect effective `systemd` permissions, verify
+that the edge OS identity cannot open the issuer private key, ensure
+the issuer has no listening socket, rehearse WAL permissions and multi-process
+restart/recovery on a staging database, and record exact artifact SHAs.
+
+The original combined service unit remains a compatibility demonstration.
+See `deploy/README.md` for the opt-in split unit templates.

@@ -22,6 +22,12 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Add role-separated Commerce service startup: the HTTP edge no longer needs
+  the Permit signing key, and the issuer/projector runs without an HTTP
+  listener. Ship separate systemd unit templates and document the residual
+  shared-writable-DB trust boundary in ADR-0020 (partial issue #10). Retain
+  combined mode for local demos only.
+
 - Pin the production-tested Permit dependency to source commit `ed32d0eec463665e470657e54d222a1b98148a1e` in
   cross-platform CI and Docker builds, while retaining a latest-main
   compatibility lane. Pin CI action revisions, exercise Docker builds in CI,

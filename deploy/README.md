@@ -1,11 +1,16 @@
 # Deploying Commerce
 
-Commerce ships as a Racket package. A deployment is one process that
-assembles the boundaries — HTTP edge, projector, issuer worker — over
-one SQLite store. `examples/service.rkt` is that assembly; this
-directory holds the two supported ways to run it. TLS termination,
-rate limiting, and log shipping stay with your reverse proxy and
-infrastructure (see `docs/runbook.md`).
+Commerce ships as a Racket package with one role-selectable entrypoint,
+`examples/service.rkt`. For a controlled deployment, run two processes on
+one SQLite store: `COMMERCE_ROLE=edge` handles webhooks and credential
+claims without reading Permit signing keys; `COMMERCE_ROLE=issuer` projects
+events and signs entitlements without starting an HTTP listener. The default
+`COMMERCE_ROLE=all` preserves the earlier combined walkthrough and is
+**not a key-isolated deployment**. See
+[ADR-0020](../docs/decisions/0020-split-service-roles.md) for the remaining
+shared-database trust risk. TLS termination, rate limiting, and log shipping
+remain the reverse proxy/infrastructure's responsibility
+(see `docs/runbook.md`).
 
 ## Configuration
 
@@ -14,7 +19,8 @@ once at startup (mode 0600, never committed).
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `COMMERCE_DB_PATH` | SQLite store path (writable) | required |
+| `COMMERCE_ROLE` | `all` (combined), `edge` (HTTP only), `issuer` (signing/projector only) | `all` for local examples |
+| `COMMERCE_DB_PATH` | Shared SQLite store path (writable by both roles) | required |
 | `COMMERCE_PORT` / `COMMERCE_LISTEN_IP` | HTTP bind | 8080 / 127.0.0.1 |
 | `COMMERCE_POLL_SECONDS` | Worker loop poll interval | 2 |
 | `COMMERCE_ENVIRONMENT` | `test` or `production`; locks the keyring and merchant reads | `test` |
@@ -33,6 +39,43 @@ The Offer/policy catalog is compiled into the service
 configuration, per `docs/permit-integration.md`.
 
 ## systemd
+
+For a split deployment, use
+[`commerce-edge.service`](commerce-edge.service) and
+[`commerce-issuer.service`](commerce-issuer.service), not the original
+combined `commerce.service`. Each process must run under a different
+unprivileged OS user. The issuer's Permit private key file must be mode
+0600 and owned by `commerce-issuer`, so `commerce-edge` cannot read it.
+The edge's merchant credential must likewise be readable only by
+`commerce-edge`. Both users require group-writable access to the same
+SQLite database and WAL directory. Example provisioning (adjust names
+and deployment policies before using):
+
+```bash
+sudo groupadd --system commerce-shared
+sudo useradd --system --gid commerce-shared --shell /usr/sbin/nologin commerce-edge
+sudo useradd --system --gid commerce-shared --shell /usr/sbin/nologin commerce-issuer
+sudo install -d -o commerce-edge -g commerce-shared -m 2770 /var/lib/commerce
+sudo install -d -o root -g root -m 0755 /etc/commerce
+sudo cp deploy/commerce-edge.service deploy/commerce-issuer.service /etc/systemd/system/
+# Create /etc/commerce/edge.env with COMMERCE_ENVIRONMENT, PANCAKE_MERCHANT_ID,
+# PANCAKE_MERCHANT_KEY_PATH and both PANCAKE_WEBHOOK_*_KEY_PATH values.
+# Create /etc/commerce/issuer.env with COMMERCE_ENVIRONMENT, COMMERCE_ISSUER,
+# PERMIT_KEY_ID, PERMIT_PRIVATE_KEY_PATH and PERMIT_TRUST_STORE_PATH.
+# Store each secret outside the repo; lock its owner and mode to 0600.
+sudo systemctl daemon-reload
+sudo systemctl enable --now commerce-issuer commerce-edge
+```
+
+The separate OS users prevent the edge process from reading the issuer key,
+**not** from writing to the shared SQLite database. A compromised HTTP edge
+with database write access may still forge workflow rows that the issuer
+trusts. Until a separately authenticated signing-intent channel or strict
+database writer boundary is implemented and tested, this is only partial
+key isolation, not full production issuance authorization security.
+
+The original combined unit remains available for a single-process local
+walkthrough only:
 
 ```bash
 sudo useradd -r -s /usr/sbin/nologin commerce

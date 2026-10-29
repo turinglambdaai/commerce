@@ -1,9 +1,9 @@
 #lang racket/base
 
-;; One deployable assembly of the commerce boundaries: the HTTP edge
-;; (webhooks, claim portal, readiness), the projector, and the issuer
-;; worker loop, over one SQLite store. Configuration comes from the
-;; environment; secrets are injected as file paths, never committed.
+;; Role-selectable assembly of the HTTP edge and the signing/projector worker.
+;; Edge and issuer may run as different OS users over the same SQLite store.
+;; Splitting role processes removes raw Permit key access from the web process
+;; but does not make their shared writable database a trusted signing boundary.
 ;;
 ;; Run it only after reading docs/runbook.md and deploy/README.md. The
 ;; catalog below is a placeholder: replace it with your product's
@@ -19,6 +19,7 @@
            commerce/health
            commerce/issuer
            commerce/pancake
+           commerce/private/service-role
            commerce/permit
            commerce/server
            commerce/storage
@@ -45,20 +46,34 @@
     (define value (env name))
     (if value (string->number value) default))
 
+  (define role
+    (with-handlers ([exn:fail?
+                     (lambda (_failure)
+                       (eprintf "COMMERCE_ROLE must be all, edge, or issuer\n")
+                       (exit 1))])
+      (parse-service-role (env "COMMERCE_ROLE" "all"))))
+  (define edge? (service-role-edge? role))
+  (define issuer? (service-role-issuer? role))
   (define db-path (env-require "COMMERCE_DB_PATH"))
-  (define port (env-number "COMMERCE_PORT" 8080))
-  (define listen-ip (env "COMMERCE_LISTEN_IP" "127.0.0.1"))
-  (define poll-seconds (env-number "COMMERCE_POLL_SECONDS" 2))
-  (define issuer-name (env-require "COMMERCE_ISSUER"))
-  (define key-id (env-require "PERMIT_KEY_ID"))
-  (define private-key-path (env-require "PERMIT_PRIVATE_KEY_PATH"))
-  (define trust-store-path (env-require "PERMIT_TRUST_STORE_PATH"))
-  (define merchant-id (env-require "PANCAKE_MERCHANT_ID"))
-  (define merchant-key-path (env-require "PANCAKE_MERCHANT_KEY_PATH"))
+  (define port (and edge? (env-number "COMMERCE_PORT" 8080)))
+  (define listen-ip
+    (and edge? (env "COMMERCE_LISTEN_IP" "127.0.0.1")))
+  (define poll-seconds
+    (and issuer? (env-number "COMMERCE_POLL_SECONDS" 2)))
+  ;; Never even read issuer signing secret paths in an edge-only process.
+  (define issuer-name (and issuer? (env-require "COMMERCE_ISSUER")))
+  (define key-id (and issuer? (env-require "PERMIT_KEY_ID")))
+  (define private-key-path
+    (and issuer? (env-require "PERMIT_PRIVATE_KEY_PATH")))
+  (define trust-store-path
+    (and issuer? (env-require "PERMIT_TRUST_STORE_PATH")))
+  (define merchant-id (and edge? (env-require "PANCAKE_MERCHANT_ID")))
+  (define merchant-key-path
+    (and edge? (env-require "PANCAKE_MERCHANT_KEY_PATH")))
   (define webhook-test-key-path
-    (env-require "PANCAKE_WEBHOOK_TEST_KEY_PATH"))
+    (and edge? (env-require "PANCAKE_WEBHOOK_TEST_KEY_PATH")))
   (define webhook-production-key-path
-    (env-require "PANCAKE_WEBHOOK_PRODUCTION_KEY_PATH"))
+    (and edge? (env-require "PANCAKE_WEBHOOK_PRODUCTION_KEY_PATH")))
   (define environment
     (match (env "COMMERCE_ENVIRONMENT" "test")
       ["test" 'test]
@@ -70,15 +85,17 @@
 
   ;; ---- trust and configuration ---------------------------------------
 
-  (define private-key (read-ed25519-private-key private-key-path))
+  (define private-key
+    (and issuer? (read-ed25519-private-key private-key-path)))
   (define trust-store
-    (jsexpr->trust-store
-     (with-input-from-file trust-store-path read-json)))
+    (and issuer?
+         (jsexpr->trust-store
+          (with-input-from-file trust-store-path read-json))))
 
   ;; PLACEHOLDER catalog: replace with the product's reviewed,
   ;; version-pinned policies. Policy ids are immutable; a rights change
   ;; is a new policy id (docs/permit-integration.md).
-  (define catalog
+  (define (make-placeholder-catalog)
     (make-permit-policy-catalog
      (list (offer "taskly-pro-lifetime" "taskly" 'one-time
                   (money "USD" 2900) "taskly-pro-v1"))
@@ -90,78 +107,83 @@
        (list (make-permit-grant-policy
               #:products '("taskly") #:edition "pro"))))))
 
+  (define catalog (and issuer? (make-placeholder-catalog)))
+
   ;; ---- storage, worker, edge ------------------------------------------
 
   (define storage (open-sqlite-commerce-storage db-path))
 
   (define worker
-    (make-issuance-worker
-     #:catalog catalog
-     #:issuer issuer-name
-     #:private-key private-key
-     #:key-id key-id
-     #:trust-store trust-store
-     #:owner (env "COMMERCE_WORKER_OWNER" "commerce-service")))
+    (and issuer?
+         (make-issuance-worker
+          #:catalog catalog
+          #:issuer issuer-name
+          #:private-key private-key
+          #:key-id key-id
+          #:trust-store trust-store
+          #:owner (env "COMMERCE_WORKER_OWNER" "commerce-service"))))
 
   (define merchant-client
-    (make-pancake-merchant-client
-     merchant-id
-     (file->string merchant-key-path)
-     #:environment environment))
+    (and edge?
+         (make-pancake-merchant-client
+          merchant-id
+          (file->string merchant-key-path)
+          #:environment environment)))
 
   (define endpoint
-    (make-webhook-endpoint
-     #:keyring
-     (pancake-webhook-keyring
-      (string-trim (file->string webhook-test-key-path))
-      (string-trim (file->string webhook-production-key-path)))
-     #:environment environment
-     #:merchant-client merchant-client
-     #:binding-lookup
-     (lambda (order-id)
-       (storage-checkout-binding-ref storage order-id))
-     #:storage storage))
+    (and edge?
+         (make-webhook-endpoint
+          #:keyring
+          (pancake-webhook-keyring
+           (string-trim (file->string webhook-test-key-path))
+           (string-trim (file->string webhook-production-key-path)))
+          #:environment environment
+          #:merchant-client merchant-client
+          #:binding-lookup
+          (lambda (order-id)
+            (storage-checkout-binding-ref storage order-id))
+          #:storage storage)))
 
   ;; ---- worker loop: project everything, then issue one, repeat -------
 
   (define stop (make-semaphore))
 
   (define worker-thread
-    (thread
-     (lambda ()
-       (let loop ()
-         (define fired (sync/timeout poll-seconds stop))
-         (unless fired
-           (with-handlers
-               ([exn:fail:commerce?
-                 ;; Release/backoff already recorded the failure on the
-                 ;; outbox row; the next pass retries within its bounds.
-                 (lambda (_failure) (void))]
-                [exn:fail?
-                 (lambda (_failure) (void))])
-             (let project ()
-               (when (storage-project-next! storage
-                                            #:processed-at
-                                            (current-seconds))
-                 (project)))
-             (process-issuance-work! worker storage))
-           (loop))))))
+    (and issuer?
+         (thread
+          (lambda ()
+            (let loop ()
+              (define fired (sync/timeout poll-seconds stop))
+              (unless fired
+                (with-handlers
+                    ([exn:fail:commerce?
+                      (lambda (_failure) (void))]
+                     [exn:fail?
+                      (lambda (_failure) (void))])
+                  (let project ()
+                    (when (storage-project-next! storage
+                                                 #:processed-at
+                                                 (current-seconds))
+                      (project)))
+                  (process-issuance-work! worker storage))
+                (loop)))))))
 
   ;; ---- serve ----------------------------------------------------------
 
   (define http-stop
-    (serve-webhook-endpoint endpoint
-                            #:port port
-                            #:listen-ip listen-ip))
+    (and edge?
+         (serve-webhook-endpoint endpoint
+                                 #:port port
+                                 #:listen-ip listen-ip)))
 
-  (printf "commerce service: db=~a port=~a environment=~a\n"
-          db-path port environment)
+  (printf "commerce service: role=~a db=~a environment=~a\n"
+          role db-path environment)
   (flush-output)
 
   ;; Block forever. SIGTERM/SIGKILL ends the process; the durable design
   ;; recovers on restart. For a clean in-process shutdown, post `stop`.
   (sync stop)
-  (http-stop)
-  (kill-thread worker-thread)
+  (when http-stop (http-stop))
+  (when worker-thread (kill-thread worker-thread))
   (storage-close storage)
   (displayln "commerce service: stopped"))
