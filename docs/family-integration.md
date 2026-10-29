@@ -2,7 +2,7 @@
 
 The canonical five-repository graph, ownership table, release order, and trust
 boundaries live in Keel's
-[family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
+[family architecture](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md).
 This document defines only Commerce's local edges; if the two disagree, update
 the canonical document and this summary in the same coordinated change.
 
