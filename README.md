@@ -246,12 +246,14 @@ that active slice. [ROADMAP.md](ROADMAP.md) owns sequencing and release gates.
 
 ## Deployment
 
-One process assembles the whole service: HTTP edge, projector, and
-issuer worker over one SQLite store. `examples/service.rkt` is the
-canonical assembly; `deploy/` ships a hardened systemd unit and a
-Docker image, and `deploy/README.md` walks through configuration,
-secrets, and the pre-production checklist. `/readyz` renders the
-readiness snapshot. Termination is crash-safe by design.
+`examples/service.rkt` supports `COMMERCE_ROLE=edge|issuer|all`. Run `edge`
+(HTTP and claim portal, no Permit private key) and `issuer` (projector and
+signer, no HTTP listener) under separate OS identities with one SQLite store.
+`all` preserves a local combined walkthrough. See [deploy/README.md](deploy/README.md)
+for systemd units and [ADR-0020](docs/decisions/0020-split-service-roles.md)
+for the unresolved shared-writable-database trust boundary. Neither separate
+processes nor a green CI by themselves prove production signing isolation.
+`/readyz` renders the readiness snapshot; crash replay remains durable.
 
 ## Development
 
