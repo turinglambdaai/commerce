@@ -40,10 +40,10 @@
 
 ;; disposition is 'completed, 'released, or 'lease-lost. A released result
 ;; names the typed error code that future operators will see on the outbox
-;; row; completion exposes the storage completion record.
+;; row; completion exposes the storage completion record. The completed
+;; result may carry a one-time customer claim token: keep it opaque too.
 (struct issuance-result
-  (disposition completion error-code entitlement-id revision claim-token)
-  #:transparent)
+  (disposition completion error-code entitlement-id revision claim-token))
 
 (define default-clock
   (lambda ()
