@@ -30,12 +30,14 @@
 ;; from the claimed outbox row, the pinned policy catalog, and the lineage
 ;; already recorded in storage, so a restart or a reclaim converges on the
 ;; same revision instead of creating a second one.
+;; Keep the capability opaque: printing or formatting a worker must never
+;; reveal its private signing key or other issuance configuration.
 
 (struct issuance-worker
   (catalog issuer private-key key-id trust-store clock
            owner lease-seconds transient-backoff-seconds
            operator-backoff-seconds claim-window-seconds)
-  #:transparent)
+  )
 
 ;; disposition is 'completed, 'released, or 'lease-lost. A released result
 ;; names the typed error code that future operators will see on the outbox
