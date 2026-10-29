@@ -56,6 +56,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0017: Provider reconciliation](decisions/0017-provider-reconciliation.md)
 - [ADR-0018: Deployment assembly](decisions/0018-deployment-assembly.md)
 - [ADR-0019: Provider admission precedes live checkout](decisions/0019-provider-admission.md)
+- [ADR-0020: Separated HTTP/issuer roles and residual shared-DB trust](decisions/0020-split-service-roles.md)
 
 ## Source entry points
 
