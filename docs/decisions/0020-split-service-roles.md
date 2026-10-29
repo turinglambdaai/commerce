@@ -50,6 +50,8 @@ production signing separation.
   **does not require or read any Permit private key path**.
 - `issuer`: requires Permit issuer, trust store, private key, policy catalog
   and shared database; **does not require provider keys or bind HTTP**.
+  The bundled example uses a placeholder catalog and explicitly refuses
+  production issuance until replaced with a reviewed real-product policy.
 - `all`: backward-compatible for `COMMERCE_ENVIRONMENT=test` mock/local
   walkthroughs only; `production` refuses it before reading secrets or
   opening storage, even if the operator leaves `COMMERCE_ROLE` unset.
