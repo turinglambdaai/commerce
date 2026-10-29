@@ -6,6 +6,10 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Load the issuer's Permit trust store through Permit's strict JSON reader,
+  rather than a generic JSON parse that could discard duplicate security-
+  critical fields. Add rejection and valid-file regression tests.
+
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
   database from an operator command, with regression tests; update outdated
