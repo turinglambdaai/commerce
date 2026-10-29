@@ -6,6 +6,11 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Keep the in-memory issuance worker opaque to Racket diagnostic printing;
+  test both display representations so accidental logging cannot serialize
+  its signing-key field. This is not a substitute for process-level key
+  isolation, which remains a production security gate (issue #10).
+
 - Render every issued RFC 3339 timestamp in true UTC regardless of the
   host time zone. `seconds->date` is local wall clock (the positional
   boolean is leap-second precision, not a UTC flag), so on a UTC+8 host
