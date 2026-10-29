@@ -186,8 +186,10 @@ Successful operations emit JSON with redacted summaries only (canonical
 events, workflow state, credential metadata with an envelope digest). All
 commands exit 0 on success; typed `redrive` refusals exit 1 with a `code`.
 Unknown commands, missing arguments, or unsupported `find` statuses exit 1
-with JSON `{"error":"invalid-arguments","usage":"..."}` on stdout so
-scripts and agents can parse the failure without scraping terminal prose.
+with JSON `{"error":"invalid-arguments","usage":"..."}` on stdout. An absent
+service database fails with JSON `{"error":"database-not-found"}` and exit 1
+instead of silently creating a new SQLite store. Scripts and agents can parse
+these failures without scraping terminal prose.
 Direct SQL is emergency diagnosis; this CLI is the supported workflow.
 
 ## Observability
