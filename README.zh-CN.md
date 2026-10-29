@@ -2,13 +2,13 @@
 
 **所有产品，共用一份商业真相——支付事件进入，签名产品权益输出。**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M3%20Subs-C15F3C)
+[![CI](https://github.com/turlamai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M3%20Subs-C15F3C)
 
 [English](README.md) · **中文**
 
 Commerce 是面向独立软件产品家族的渠道中立商业管理面。所有产品通过同一处
 创建结账、接收并审计支付事件、投影订单与订阅状态，再把商业结果变成由
-[Permit](https://github.com/turinglambdaai/permit) 签发的产品权益。
+[Permit](https://github.com/turlamai/permit) 签发的产品权益。
 
 Commerce 不是支付机构、Merchant of Record、税务引擎、CRM 或 DRM。
 Pancake、ZPAY、应用商店与未来渠道负责资金流转；Permit 负责可在本地验证的
@@ -34,7 +34,7 @@ owner 安全的租约状态机和事务型 lineage 写入器，显式 issuer wor
 
 ```bash
 raco pkg install --auto --name commerce \
-  https://github.com/turinglambdaai/commerce.git
+  https://github.com/turlamai/commerce.git
 
 racket examples/first-purchase.rkt
 ```
@@ -99,7 +99,7 @@ Permit               -X-> Commerce
 ```
 
 本仓边界见[架构](docs/architecture.md)与[家族集成](docs/family-integration.md)；
-[五仓家族架构](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md)
+[五仓家族架构](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md)
 是跨仓依赖、职责与发布顺序的唯一权威来源。
 
 ## 核心词汇
@@ -201,8 +201,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 
 上述 HTTP 边界、领取门户、运营重放/审计、订阅投影已是实现面，不再列为 TODO；
 本地/fixture 覆盖与真实渠道集成证据分别记录。下一条受控集成为 gptp-studio 的
-一次性购买 offer 与签名更新窗，沿用 [issue #1](https://github.com/turinglambdaai/commerce/issues/1)
-及 [PR #2](https://github.com/turinglambdaai/commerce/pull/2)，不重复启动活动中的切片。
+一次性购买 offer 与签名更新窗，沿用 [issue #1](https://github.com/turlamai/commerce/issues/1)
+及 [PR #2](https://github.com/turlamai/commerce/pull/2)，不重复启动活动中的切片。
 顺序与发布门禁以 [ROADMAP.md](ROADMAP.md) 为准。
 
 ## 部署

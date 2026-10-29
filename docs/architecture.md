@@ -8,7 +8,7 @@ Commerce is a hosted commercial management plane. Its central rule is:
 No layer substitutes for another.
 
 The canonical cross-repository ownership and release rules live in the
-[family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
+[family architecture](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md).
 This document owns Commerce's internal architecture and local integration
 boundary.
 

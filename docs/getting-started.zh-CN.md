@@ -13,7 +13,7 @@
 ## 2. 安装源码链接包
 
 ```bash
-git clone https://github.com/turinglambdaai/commerce.git
+git clone https://github.com/turlamai/commerce.git
 cd commerce
 raco pkg install --auto --no-docs --name commerce .
 ```
