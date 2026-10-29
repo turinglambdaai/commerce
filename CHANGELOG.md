@@ -10,7 +10,9 @@ All notable changes to Commerce are documented here.
   rather than a generic JSON parse that could discard duplicate security-
   critical fields. Add rejection and valid-file regression tests. Reject
   `COMMERCE_ENVIRONMENT=production` with a combined HTTP/signing role before
-  secret file or database access, with role-policy tests.
+  secret file or database access, with role-policy tests. The bundled demo
+  entitlement catalog also refuses all production issuance until a real,
+  reviewed policy replaces the fixture, with explicit negative tests.
 
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
