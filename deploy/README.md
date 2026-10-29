@@ -46,6 +46,12 @@ or adding live secrets is not a production launch procedure.
 
 ## systemd
 
+For a split deployment, start from [edge.env.example](edge.env.example) and
+[issuer.env.example](issuer.env.example); each contains only the configuration
+and secret paths needed by that role. Never give the edge OS user read access
+to the issuer secret directory, and do not use combined `commerce.env.example`
+for production.
+
 For a split deployment, use
 [`commerce-edge.service`](commerce-edge.service) and
 [`commerce-issuer.service`](commerce-issuer.service), not the original
