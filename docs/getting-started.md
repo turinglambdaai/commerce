@@ -14,7 +14,7 @@ secret, network access, or real payment is required.
 ## 2. Install a linked checkout
 
 ```bash
-git clone https://github.com/turinglambdaai/commerce.git
+git clone https://github.com/turlamai/commerce.git
 cd commerce
 raco pkg install --auto --no-docs --name commerce .
 ```

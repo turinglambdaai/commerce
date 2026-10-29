@@ -2,14 +2,14 @@
 
 **One commercial truth for every product — payment events in, signed product rights out.**
 
-[![CI](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M3%20Subs-C15F3C)
+[![CI](https://github.com/turlamai/commerce/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/commerce/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![Stage](https://img.shields.io/badge/stage-M3%20Subs-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
 Commerce is the provider-neutral commercial management plane for independent
 software. It gives every product one place to create checkout sessions, accept
 and audit payment events, project orders and subscriptions, and turn commercial
-outcomes into signed [Permit](https://github.com/turinglambdaai/permit) rights.
+outcomes into signed [Permit](https://github.com/turlamai/permit) rights.
 
 Commerce is not a payment processor, merchant of record, tax engine, CRM, or
 DRM system. Pancake, ZPAY, app stores, and future providers remain responsible
@@ -39,7 +39,7 @@ walkthrough.
 
 ```bash
 raco pkg install --auto --name commerce \
-  https://github.com/turinglambdaai/commerce.git
+  https://github.com/turlamai/commerce.git
 
 racket examples/first-purchase.rkt
 ```
@@ -111,7 +111,7 @@ Permit               -X-> Commerce
 
 See [Architecture](docs/architecture.md) and
 [Family integration](docs/family-integration.md) for the local ownership rules;
-the [family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md)
+the [family architecture](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md)
 is the canonical five-repository contract.
 
 ## Core vocabulary
@@ -240,8 +240,8 @@ The HTTP edge, claim portal, operator replay/audit and subscription projections
 listed above are implemented surfaces, not remaining TODOs. Their local/fixture
 coverage is distinct from a live provider integration. The next bounded
 integration is gptp-studio's one-time-purchase offer and signed maintenance
-window, coordinated in [issue #1](https://github.com/turinglambdaai/commerce/issues/1)
-and [PR #2](https://github.com/turinglambdaai/commerce/pull/2). Do not duplicate
+window, coordinated in [issue #1](https://github.com/turlamai/commerce/issues/1)
+and [PR #2](https://github.com/turlamai/commerce/pull/2). Do not duplicate
 that active slice. [ROADMAP.md](ROADMAP.md) owns sequencing and release gates.
 
 ## Deployment
