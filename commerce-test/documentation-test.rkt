@@ -44,7 +44,7 @@
                target)))))
 
 (define canonical-family-url
-  "https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md")
+  "https://github.com/turlamai/keel/blob/main/docs/family-architecture.md")
 
 (for ([entry '("AGENTS.md"
                "README.md"

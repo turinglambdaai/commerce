@@ -128,6 +128,12 @@
     (query-value connection (format "SELECT COUNT(*) FROM ~a" table))
     (disconnect connection)))
 
+(test-case "signing worker is opaque to diagnostics and log formatting"
+  (define signing-worker (worker))
+  (check-true (issuance-worker? signing-worker))
+  (check-equal? (format "~s" signing-worker) "#<issuance-worker>")
+  (check-equal? (format "~v" signing-worker) "#<issuance-worker>"))
+
 (test-case "the worker signs a grant and records revision zero transactionally"
   (call-with-temporary-database
    (lambda (path)
@@ -135,6 +141,9 @@
      (define result
        (process-issuance-work! (worker) storage))
      (check-eq? (issuance-result-disposition result) 'completed)
+     ;; The result carries a one-time claim token, never safe to log via ~s.
+     (check-equal? (format "~s" result) "#<issuance-result>")
+     (check-equal? (format "~v" result) "#<issuance-result>")
      (check-false (issuance-result-error-code result))
      (check-equal? (issuance-result-revision result) 0)
      (define completion (issuance-result-completion result))
