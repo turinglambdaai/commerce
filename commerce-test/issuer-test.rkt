@@ -141,6 +141,9 @@
      (define result
        (process-issuance-work! (worker) storage))
      (check-eq? (issuance-result-disposition result) 'completed)
+     ;; The result carries a one-time claim token, never safe to log via ~s.
+     (check-equal? (format "~s" result) "#<issuance-result>")
+     (check-equal? (format "~v" result) "#<issuance-result>")
      (check-false (issuance-result-error-code result))
      (check-equal? (issuance-result-revision result) 0)
      (define completion (issuance-result-completion result))
