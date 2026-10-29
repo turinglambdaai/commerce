@@ -66,13 +66,13 @@
    (file-exists? (build-path repository-root entry))
    (format "missing security/release governance entry ~a" entry)))
 
-(for ([entry '("README.md" "README.zh-CN.md" "ROADMAP.md")])
+(for ([entry '("AGENTS.md" "README.md" "README.zh-CN.md" "ROADMAP.md")])
   (check-true
    (string-contains? (file->string (build-path repository-root entry))
                      "docs/release-checklist.md")
    (format "~a must identify the verifiable release gates" entry)))
 
-(for ([entry '("README.md" "README.zh-CN.md" "CONTRIBUTING.md")])
+(for ([entry '("AGENTS.md" "README.md" "README.zh-CN.md" "CONTRIBUTING.md")])
   (check-true
    (string-contains? (file->string (build-path repository-root entry))
                      "SECURITY.md")
