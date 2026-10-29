@@ -1,0 +1,29 @@
+[Unit]
+Description=Commerce HTTP edge (no Permit entitlement signing key)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=commerce-edge
+Group=commerce-shared
+UMask=0007
+WorkingDirectory=/var/lib/commerce
+ExecStart=/usr/bin/racket /opt/commerce/examples/service.rkt
+Environment=COMMERCE_ROLE=edge
+Environment=COMMERCE_DB_PATH=/var/lib/commerce/commerce.sqlite
+Environment=COMMERCE_LISTEN_IP=127.0.0.1
+EnvironmentFile=/etc/commerce/edge.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/commerce
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
