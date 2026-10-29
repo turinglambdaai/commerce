@@ -2,7 +2,9 @@
 
 (require rackunit
          racket/file
-         permit/issuer
+         (only-in permit/issuer
+                  generate-ed25519-keypair
+                  public-key->base64)
          permit/trust
          json)
 
