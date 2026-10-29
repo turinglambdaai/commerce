@@ -207,10 +207,13 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 
 ## 部署
 
-一个进程装配整个服务:HTTP 边界、投影器与 issuer worker,共用一个
-SQLite 存储。`examples/service.rkt` 是规范装配;`deploy/` 提供加固的
-systemd unit 与 Docker 镜像,`deploy/README.md` 完整说明配置、密钥与
-上线前清单。`/readyz` 暴露就绪快照。终止即崩溃安全,重启自动收敛。
+`examples/service.rkt` 支持 `COMMERCE_ROLE=edge|issuer|all`。建议以不同的
+操作系统身份运行 HTTP Edge（不加载 Permit 签名私钥）与 Issuer（不开放 HTTP
+监听），共用 SQLite 存储；`all` 仅保留本地合并演练。具体配置参考
+[部署指南](deploy/README.md)，未解决的共享数据库写权限风险详见
+[ADR-0020](docs/decisions/0020-split-service-roles.md)。**进程拆分不等于签发授权
+已完全隔离，更不代表具备真实付款上线证据。**`/readyz` 提供就绪状态，
+崩溃后仍依赖持久化重试收敛。
 
 ## 开发
 
