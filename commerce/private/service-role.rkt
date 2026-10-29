@@ -3,7 +3,8 @@
 (provide parse-service-role
          service-role-edge?
          service-role-issuer?
-         validate-service-role-environment!)
+         validate-service-role-environment!
+         reject-demo-catalog-in-production!)
 
 ;; 'all is retained for local walkthroughs. Split edge and issuer roles
 ;; require separate OS users and a shared SQLite store in deployment.
@@ -34,6 +35,19 @@
   (when (and (eq? environment 'production) (eq? role 'all))
     (raise-arguments-error 'validate-service-role-environment!
                            "combined HTTP/issuer role is forbidden in production"
+                           "role" role
+                           "environment" environment))
+  (void))
+
+;; The bundled Taskly catalog is a fixture, not an admitted commercial offer.
+;; A real product must replace this call with its reviewed product catalog
+;; before production signing is enabled. Edge-only ingress can still boot.
+(define (reject-demo-catalog-in-production! role environment)
+  (validate-service-role-environment! role environment)
+  (when (and (eq? environment 'production)
+             (service-role-issuer? role))
+    (raise-arguments-error 'reject-demo-catalog-in-production!
+                           "bundled demo offer catalog cannot issue production rights"
                            "role" role
                            "environment" environment))
   (void))
