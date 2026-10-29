@@ -238,11 +238,15 @@ Remaining external integration and release gates:
 
 The HTTP edge, claim portal, operator replay/audit and subscription projections
 listed above are implemented surfaces, not remaining TODOs. Their local/fixture
-coverage is distinct from a live provider integration. The next bounded
-integration is gptp-studio's one-time-purchase offer and signed maintenance
-window, coordinated in [issue #1](https://github.com/turlamai/commerce/issues/1)
-and [PR #2](https://github.com/turlamai/commerce/pull/2). Do not duplicate
-that active slice. [ROADMAP.md](ROADMAP.md) owns sequencing and release gates.
+coverage is distinct from a live provider integration. The gptp-studio
+payment-evidence-derived maintenance window was implemented in
+[merged PR #2](https://github.com/turlamai/commerce/pull/2) (closing
+[issue #1](https://github.com/turlamai/commerce/issues/1)); it is fixture-tested,
+not a live checkout. The next release gates are provider admission,
+trusted signing authorization and a real purchase/claim canary.
+[ROADMAP.md](ROADMAP.md) and the
+[release evidence checklist](docs/release-checklist.md) own the sequencing
+and verification requirements.
 
 ## Deployment
 
@@ -254,6 +258,14 @@ for systemd units and [ADR-0020](docs/decisions/0020-split-service-roles.md)
 for the unresolved shared-writable-database trust boundary. Neither separate
 processes nor a green CI by themselves prove production signing isolation.
 `/readyz` renders the readiness snapshot; crash replay remains durable.
+
+## Security reporting and release status
+
+Please report suspected security vulnerabilities privately through
+[SECURITY.md](SECURITY.md), not in public issues. The
+[release checklist](docs/release-checklist.md) records the still-unproven
+merchant admission, signer trust and live purchase gates; a successful local
+walkthrough does not establish production readiness.
 
 ## Development
 
