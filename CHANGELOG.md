@@ -6,6 +6,11 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Resolve pinned and compatibility Permit sources from the renamed
+  `turlamai/permit` GitHub repository in CI and Docker; keep the existing
+  reviewed Permit commit SHA unchanged so release dependency identity is
+  preserved. The former GitHub owner URL no longer resolves reliably.
+
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
   database from an operator command, with regression tests; update outdated
