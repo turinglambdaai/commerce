@@ -25,7 +25,6 @@
            commerce/storage
            commerce/storage/sqlite
            permit/issuer
-           permit/trust
            racket/file
            racket/match
            racket/string)
