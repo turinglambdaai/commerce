@@ -25,11 +25,21 @@
    "  raco commerce redrive <database> <idempotency-key>\n"))
 
 (define (fail-usage!)
-  (write-string (usage))
+  ;; Automation must be able to parse a refusal as reliably as a success.
+  (emit-json (hash 'error "invalid-arguments" 'usage (usage)))
   1)
 
 (define (open-database path)
   (open-sqlite-commerce-storage path))
+
+(define (with-existing-database path action)
+  ;; sqlite3-connect in storage uses create mode for service bootstrap.
+  ;; An operator typo must not bootstrap an empty service database.
+  (if (file-exists? path)
+      (action)
+      (begin
+        (emit-json (hash 'error "database-not-found"))
+        1)))
 
 (define (emit-json value)
   (write-json value)
@@ -128,12 +138,20 @@
 ;; usage error. Output is JSON on stdout; module `main` performs the exit.
 (define (run-commerce-cli! arguments)
   (match arguments
-    [(vector "find" database) (command-find database #f)]
-    [(vector "find" database status) (command-find database status)]
+    [(vector "find" database)
+     (with-existing-database database
+       (lambda () (command-find database #f)))]
+    [(vector "find" database status)
+     (if (member status '("pending" "processing" "completed"))
+         (with-existing-database database
+           (lambda () (command-find database status)))
+         (fail-usage!))]
     [(vector "explain" database provider order-id)
-     (command-explain database provider order-id)]
+     (with-existing-database database
+       (lambda () (command-explain database provider order-id)))]
     [(vector "redrive" database key)
-     (command-redrive database key)]
+     (with-existing-database database
+       (lambda () (command-redrive database key)))]
     [_ (fail-usage!)]))
 
 (module+ main

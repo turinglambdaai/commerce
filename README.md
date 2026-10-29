@@ -164,7 +164,7 @@ Implemented now:
 - a provider adapter contract and mock walkthrough;
 - a durable SQLite raw-event journal with digest verification, exact replay,
   conflicting-replay rejection, and database-enforced immutable rows;
-- SQLite schema v4 with in-place v1/v2/v3 migration, deterministic journal
+- SQLite schema v7 with versioned migrations from v1-v6, deterministic journal
   projection, atomic order plus issuance-outbox writes, and append-only,
   contiguous entitlement-lineage evidence;
 - exact-byte Pancake RSA-SHA256 verification with explicit environment keys,

@@ -6,6 +6,11 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
+  or `database-not-found`, exit 1), and refuse to silently create a new
+  database from an operator command, with regression tests; update outdated
+  operations and README schema/CLI descriptions to match the current v7 store.
+
 - Render every issued RFC 3339 timestamp in true UTC regardless of the
   host time zone. `seconds->date` is local wall clock (the positional
   boolean is leap-second precision, not a UTC flag), so on a UTC+8 host

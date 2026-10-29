@@ -33,11 +33,10 @@ history.
 
 ## Journal evidence
 
-The SQLite service store uses application id `COMM` and schema version 4.
-Opening a schema-v1 journal creates the projection, outbox, lineage, and
-delivery schema; opening schema v2 adds lineage and delivery tables; opening
-schema v3 adds only the delivery tables. All migrations are atomic and
-preserve existing evidence. Operational inspection should select identifiers
+The SQLite service store uses application id `COMM` and current schema
+version 7. Opening an older supported database (versions 1 through 6)
+performs versioned migrations to the current schema in a transaction,
+preserving prior journal evidence. Operational inspection should select identifiers
 and status metadata, not `raw_payload`:
 
 ```sql
@@ -94,7 +93,7 @@ headless replay vocabulary: `find-issuance-work` enumerates outbox rows,
 canonical events (raw provider bytes stay behind `commerce/journal`), and
 `redrive-issuance-work!` makes one pending row due without touching its
 attempts counter — it refuses to rewind in-flight or completed work. The
-CLI wrapper is future work; this module is its entire implementation.
+`raco commerce` CLI is the supported wrapper for these operations.
 
 Claim delivery state is explicit: `ready` until the token is fulfilled,
 `claimed` once fulfilled, and expired once the fulfillment window passes.
@@ -170,7 +169,7 @@ window-passed count. `commerce/health` classifies that snapshot into typed
 warnings — `projection-blocked`, `issuance-lease-expired`,
 `claim-window-passed` — and `health-report!` logs them on the commerce
 topic so a scheduled check leaves the same evidence a human would read.
-The future HTTP edge renders this value; the classification itself is
+The `/readyz` HTTP edge renders this value; the classification itself is
 transport-neutral and mutates nothing.
 
 ## Operator CLI
@@ -183,10 +182,15 @@ raco commerce explain <database> <provider> <order-id>
 raco commerce redrive <database> <idempotency-key>
 ```
 
-Output is JSON with redacted summaries only (canonical events, workflow
-state, credential metadata with an envelope digest). `redrive` exits 0 on
-success and 1 with a typed `code` on refusal. Direct SQL is emergency
-diagnosis; this CLI is the supported workflow.
+Successful operations emit JSON with redacted summaries only (canonical
+events, workflow state, credential metadata with an envelope digest). All
+commands exit 0 on success; typed `redrive` refusals exit 1 with a `code`.
+Unknown commands, missing arguments, or unsupported `find` statuses exit 1
+with JSON `{"error":"invalid-arguments","usage":"..."}` on stdout. An absent
+service database fails with JSON `{"error":"database-not-found"}` and exit 1
+instead of silently creating a new SQLite store. Scripts and agents can parse
+these failures without scraping terminal prose.
+Direct SQL is emergency diagnosis; this CLI is the supported workflow.
 
 ## Observability
 

@@ -78,6 +78,29 @@
      (check-equal? (length (hash-ref explanation 'work)) 1)
      (check-equal? (length (hash-ref explanation 'credentials)) 1))))
 
+(test-case "invalid CLI arguments fail with parseable JSON"
+  (for ([arguments (in-list (list (vector)
+                                  (vector "find" "unused.sqlite" "unsupported")))])
+    (define-values (code result)
+      (call-with-cli (lambda () (run-commerce-cli! arguments))))
+    (check-equal? code 1)
+    (check-equal? (hash-ref result 'error) "invalid-arguments")
+    (check-true (string? (hash-ref result 'usage)))))
+
+(test-case "operator commands refuse to create a missing service database"
+  (call-with-temporary-database
+   (lambda (path)
+     (check-false (file-exists? path))
+     (for ([arguments (in-list
+                       (list (vector "find" (path->string path))
+                             (vector "explain" (path->string path) "mock" "order")
+                             (vector "redrive" (path->string path) "missing")))])
+       (define-values (code result)
+         (call-with-cli (lambda () (run-commerce-cli! arguments))))
+       (check-equal? code 1)
+       (check-equal? (hash-ref result 'error) "database-not-found")
+       (check-false (file-exists? path))))))
+
 (test-case "redrive reports success and typed refusal as exit data"
   (call-with-temporary-database
    (lambda (path)
