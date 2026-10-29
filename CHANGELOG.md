@@ -17,6 +17,11 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Pin the production-tested Permit dependency to source commit `ed32d0eec463665e470657e54d222a1b98148a1e` in
+  cross-platform CI and Docker builds, while retaining a latest-main
+  compatibility lane. Pin CI action revisions, exercise Docker builds in CI,
+  and require a verified base-image digest for production releases.
+
 - Add the provider admission gate (ADR-0019): no adapter presents a
   live checkout until an admission record is complete — approved
   account scope, capability matrix (method × currency × transaction
