@@ -86,6 +86,10 @@
   ;; Reject production's combined web + signing process before loading any
   ;; private key or opening the store. Two OS identities remain required.
   (validate-service-role-environment! role environment)
+  ;; This example deliberately bundles a Taskly demo Offer. Until a real
+  ;; product replaces this entire example catalog with reviewed policy,
+  ;; production issuance must fail before reading any signing keys.
+  (reject-demo-catalog-in-production! role environment)
 
   ;; ---- trust and configuration ---------------------------------------
 
