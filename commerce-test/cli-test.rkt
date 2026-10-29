@@ -78,6 +78,15 @@
      (check-equal? (length (hash-ref explanation 'work)) 1)
      (check-equal? (length (hash-ref explanation 'credentials)) 1))))
 
+(test-case "invalid CLI arguments fail with parseable JSON"
+  (for ([arguments (in-list (list (vector)
+                                  (vector "find" "unused.sqlite" "unsupported")))])
+    (define-values (code result)
+      (call-with-cli (lambda () (run-commerce-cli! arguments))))
+    (check-equal? code 1)
+    (check-equal? (hash-ref result 'error) "invalid-arguments")
+    (check-true (string? (hash-ref result 'usage)))))
+
 (test-case "redrive reports success and typed refusal as exit data"
   (call-with-temporary-database
    (lambda (path)
