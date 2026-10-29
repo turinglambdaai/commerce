@@ -36,9 +36,13 @@ once at startup (mode 0600, never committed).
 | `PANCAKE_WEBHOOK_TEST_KEY_PATH` | Pancake test webhook public key (PEM) | required |
 | `PANCAKE_WEBHOOK_PRODUCTION_KEY_PATH` | Pancake production webhook public key (PEM) | required |
 
-The Offer/policy catalog is compiled into the service
-(`examples/service.rkt` carries a placeholder) — it is code-reviewed
-configuration, per `docs/permit-integration.md`.
+The Offer/policy catalog is compiled into the service.
+`examples/service.rkt` contains a **non-production Taskly fixture catalog**:
+issuer startup fails in production even when `COMMERCE_ROLE=issuer`.
+Replace the demo catalog and the explicit demo-only guard with an audited,
+version-pinned product policy before any real payment/entitlement deployment
+(per `docs/permit-integration.md`). Merely changing the environment variable
+or adding live secrets is not a production launch procedure.
 
 ## systemd
 
