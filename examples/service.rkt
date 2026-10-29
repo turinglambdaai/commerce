@@ -83,6 +83,10 @@
                 other)
        (exit 1)]))
 
+  ;; Reject production's combined web + signing process before loading any
+  ;; private key or opening the store. Two OS identities remain required.
+  (validate-service-role-environment! role environment)
+
   ;; ---- trust and configuration ---------------------------------------
 
   (define private-key
