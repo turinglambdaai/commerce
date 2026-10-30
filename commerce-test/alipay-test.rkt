@@ -178,6 +178,9 @@
      binding private-pem "Taskly Pro" "2026-10-30 09:00:00"
      "https://example.test/alipay/notify"
      #:return-url "https://example.test/payment/return"))
+  (define signed-bytes
+    (string->bytes/utf-8
+     (alipay-canonical-parameters fields #:notification? #f)))
   (check-equal? (hash-ref fields "method") "alipay.trade.page.pay")
   (check-equal? (hash-ref fields "sign_type") "RSA2")
   (check-equal? (hash-ref fields "notify_url") "https://example.test/alipay/notify")
@@ -186,9 +189,6 @@
                           'out_trade_no) "order_001")
   (check-equal? (hash-ref (string->jsexpr (hash-ref fields "biz_content"))
                           'total_amount) "19.90")
-  (define signed-bytes
-    (string->bytes/utf-8
-     (alipay-canonical-parameters fields #:notification? #f)))
   (check-true
    (parameterize ([crypto-factories (list libcrypto-factory)])
      (digest/verify
@@ -263,10 +263,11 @@
   (check-equal? (payment-event-occurred-at event) 1793354400)
   (check-equal? (string-length (payment-event-payload-digest event)) 64)
   ;; Reconciliation works even when the asynchronous notification is lost.
-  (define recovery
-    (verified-alipay-trade-query->payment-event raw binding public-pem 1793354400))
-  (check-equal? (payment-event-event-id recovery)
-                (payment-event-event-id event)))
+  (let ([recovery
+         (verified-alipay-trade-query->payment-event
+          raw binding public-pem 1793354400)])
+    (check-equal? (payment-event-event-id recovery)
+                  (payment-event-event-id event))))
 
 (test-case "signed query mismatches, refund and unpaid statuses fail closed"
   (for ([fields (list (hash-set query-fields 'out_trade_no "wrong_order")
@@ -303,21 +304,9 @@
   (define corrupted
     (bytes-append (subbytes signed 0 (- (bytes-length signed) 1))
                   #" "))
-  (check-exn
-   (bad-code? 'alipay-query-invalid)
-   (lambda ()
-     (verified-alipay-trade-query->payment-event
-      corrupted binding public-pem 1793354400)))
-  (define other-amount
-    (bytes->string/utf-8 signed))
+  (define other-amount (bytes->string/utf-8 signed))
   (define tampered
-    (string->bytes/utf-8
-     (string-replace other-amount "19.90" "19.91")))
-  (check-exn
-   (bad-code? 'alipay-signature-invalid)
-   (lambda ()
-     (verified-alipay-trade-query->payment-event
-      tampered binding public-pem 1793354400)))
+    (string->bytes/utf-8 (string-replace other-amount "19.90" "19.91")))
   (define duplicate-signed-body
     (string-replace (jsexpr->string query-fields)
                     "\"code\":\"10000\""
@@ -335,6 +324,16 @@
       ",\"sign\":\""
       (bytes->string/utf-8 (base64-encode duplicate-sig #:line #f))
       "\"}")))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      corrupted binding public-pem 1793354400)))
+  (check-exn
+   (bad-code? 'alipay-signature-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      tampered binding public-pem 1793354400)))
   (check-exn
    (bad-code? 'alipay-query-invalid)
    (lambda ()
