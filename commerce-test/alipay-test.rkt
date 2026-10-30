@@ -293,8 +293,8 @@
            #:seller-id "2088000000000000"
            #:alipay-public-key public-key
            #:query-order
-           (lambda (order-id)
-             (check-equal? order-id "order_test_001")
+           (lambda (binding)
+             (check-equal? (alipay-binding-order-id binding) "order_test_001")
              (set! query-count (add1 query-count))
              (signed-query-response))
            #:storage storage))
