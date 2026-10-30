@@ -139,6 +139,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/storage)   ; durable projection/outbox operations
 (require commerce/storage/sqlite) ; SQLite service-storage backend
 (require commerce/pancake)   ; Pancake authentication and active order proof
+(require commerce/alipay)   ; Alipay RSA2 checkout fields and signed notification boundary
 (require commerce/permit)    ; reviewed Offer policy to Permit snapshots
 (require commerce/issuer)    ; explicit issuer worker: claim, sign, deliver
 (require commerce/operator)  ; operator find/explain/redrive surface
