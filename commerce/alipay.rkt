@@ -35,6 +35,7 @@
          crypto/pem
          racket/list
          racket/format
+         racket/port
          racket/string
          (only-in "provider.rkt" make-verified-payment-event)
          "private/model.rkt")
