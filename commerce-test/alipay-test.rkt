@@ -303,19 +303,23 @@
         ;; The original notification contains base64 + / = and a payment
         ;; timestamp with spaces; a real HTTP form must preserve all of it.
         (define (escape-value v)
+          ;; Escape literal + before encoding spaces to +, or gmt_payment
+          ;; would decode to a plus and invalidate the RSA2 signature.
           (string-replace
            (string-replace
             (string-replace
-             (string-replace v "%" "%25") "+" "%2B")
-            "/" "%2F")
-           "=" "%3D"))
+             (string-replace
+              (string-replace v "%" "%25") "+" "%2B")
+             "/" "%2F")
+            "=" "%3D")
+           " " "+"))
         (define payload
           (string->bytes/utf-8
            (string-join
             (for/list ([pair (in-list signed-fields)])
               (string-append
                (car pair) "="
-               (escape-value (string-replace (cdr pair) " " "+"))))
+               (escape-value (cdr pair))))
             "&")))
         (define-values (first-status first-body)
           (handle-alipay-webhook-post endpoint payload))
