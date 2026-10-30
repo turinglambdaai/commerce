@@ -266,7 +266,7 @@
   (check-equal? (payment-event-subject-id event) "subject-test-001")
   (check-equal? (payment-event-amount event) (money "CNY" 1990))
   (check-equal? (payment-event-occurred-at event) 1793354400)
-  (check-equal? (string-length (payment-event-payload-digest event)) 64)
+  (check-equal? (string-length (payment-event-event-id event)) 70)
   ;; Reconciliation works even when the asynchronous notification is lost.
   (let ([recovery
          (verified-alipay-trade-query->payment-event
