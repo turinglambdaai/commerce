@@ -93,6 +93,16 @@ a buyer cannot pay must never be offered, and nothing is repriced,
 converted, or split to fit. Current status: Pancake and ZPAY are not
 admitted; no approved merchant account exists.
 
+## Alipay Vibe Pay Basic Collection (candidate)
+
+The initial **server-side Racket** `commerce/alipay` module validates
+RSA2-signed notifications against durable merchant order bindings and
+independently authenticated active query facts, emitting one canonical
+one-time payment event on a complete match. It is not yet an HTTP,
+checkout, refund, or approved-merchant adapter. See the
+[Alipay integration boundary and release gate](alipay-vibe-pay.md);
+keep every unimplemented production capability disabled.
+
 ## Provider-specific notes
 
 Pancake is the first production adapter because it supports individual

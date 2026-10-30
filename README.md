@@ -152,6 +152,14 @@ The default `commerce` facade does not expose provider secrets, raw webhook
 acceptance, network listeners, databases, or Permit signing. Those capabilities
 belong to explicit server-side modules.
 
+## Alipay Vibe Pay (integration candidate)
+
+The optional server-side [Alipay Vibe Pay Basic Collection adapter](docs/alipay-vibe-pay.md)
+is implemented as a signed checkout/request boundary, RSA2-confirmed active
+query client, strict callback parser and durable journal-based callback
+listener. **Its CI and merchant admission are still pending**, and it must
+not be represented as production-ready. It uses Racket, not Node/npm.
+
 ## Current status
 
 Implemented now:

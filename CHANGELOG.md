@@ -36,6 +36,14 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Start an optional Alipay Vibe Pay Basic Collection Racket adapter slice:
+  RSA2-signed notification canonicalization and verification, CNY
+  minor-unit conversion, matching merchant/Offer/subject checkout binding
+  plus independently authenticated order-query evidence, and negative
+  synthetic RSA fixtures. Document that checkout creation, production HTTP,
+  active query, refunds and merchant admission are **not** implemented.
+
+
 - Add role-separated Commerce service startup: the HTTP edge no longer needs
   the Permit signing key, and the issuer/projector runs without an HTTP
   listener. Ship separate systemd unit templates and document the residual
