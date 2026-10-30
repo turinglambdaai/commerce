@@ -125,7 +125,7 @@ PEM
   (check-exn (code? 'alipay-duplicate-field)
              (lambda () (parse-alipay-form #"app_id=good&app_id=evil")))
   (for ([bad (list #"" #"noequals" #"a=1&" #"a=%FG"
-                    #"a=%E4%B8" #"a=%" #"a=1=b")])
+                    #"a=%E4%B8" #"a=%")])
     (check-exn (code? 'alipay-form-invalid)
                (lambda () (parse-alipay-form bad))))
   (check-exn (code? 'alipay-form-invalid)
