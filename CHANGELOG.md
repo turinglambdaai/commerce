@@ -28,6 +28,16 @@ All notable changes to Commerce are documented here.
 
 ### Added
 
+- Introduce the `commerce/alipay` RSA2 boundary for Vibe Pay basic web
+  collection: signed page-pay parameter construction, strict decoded POST
+  form parsing (including duplicate-key/UTF-8 rejection), exact CNY
+  minor-unit checks, native signature and checkout-binding validation.
+  A signed callback remains an opaque notice, not a verified payment or
+  Permit-issuance event until authenticated active order proof and durable
+  journal integration are implemented. Ship negative tests and a
+  provider-specific go-live handoff document.
+
+
 - Add role-separated Commerce service startup: the HTTP edge no longer needs
   the Permit signing key, and the issuer/projector runs without an HTTP
   listener. Ship separate systemd unit templates and document the residual
