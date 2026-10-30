@@ -36,11 +36,14 @@ Commerce. Rivet, Glaze, and Keel never import Commerce. An operator UI may be a
 separate Glaze product without making the headless Commerce service depend on
 Glaze.
 
-The current `commerce/permit` adapter consumes only Permit's published snapshot
+The `commerce/permit` adapter consumes only Permit's published snapshot
 constructors. It resolves reviewed Offer policy and returns a validated complete
-payload plus immutable exact bytes; it does not yet call the signer. Signing,
-key custody, lineage persistence, and claim delivery remain later explicit
-server capabilities.
+payload plus immutable exact bytes; that module itself does not call the signer.
+The explicit `commerce/issuer` worker **does** sign via `permit/issuer`,
+persist a validated lineage revision and issue a one-time claim using the
+storage/outbox boundary. The claim portal is implemented in `commerce/server`.
+A product-scoped *current hosted entitlement* read API is **not** implemented;
+see the [proposed bridge](decisions/0021-hosted-service-entitlement-bridge-proposal.md).
 
 ## Product composition
 
@@ -54,6 +57,17 @@ The product or an identity service supplies or establishes the opaque stable
 subject id. Email and provider customer ids are mappings, not authorization
 identities. Checkout redirects, claim tokens, and Commerce API responses are
 workflow evidence, never permission to unlock a feature.
+
+## Hosted-product integration (proposal, not a published API)
+
+A hosted product with quota-gated jobs (Publy is the first candidate) still
+needs a scoped server-to-server current-entitlement read. The existing
+one-time claim portal returns signed Permit evidence, but it is not a
+current-status service and must not be used as a shortcut for authorization.
+See [ADR-0021 (proposal)](decisions/0021-hosted-service-entitlement-bridge-proposal.md)
+for the missing interface, trust boundaries, fail-closed behavior, and
+acceptance. Until implemented and deployed, do not advertise Commerce-based
+hosted authorization, or treat local Publy payment records as Commerce facts.
 
 ## Change flow
 
