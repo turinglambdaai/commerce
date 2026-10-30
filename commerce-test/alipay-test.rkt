@@ -152,6 +152,26 @@
                  (hash-set notification-fields "sign_type" "RSA"))
                 binding public-pem))))
 
+(test-case "Alipay callback variants cannot be confused with a first payment"
+  (for ([f (list (hash-set notification-fields "refund_fee" "1.00")
+                 (hash-set notification-fields "out_biz_no" "refund_001")
+                 (hash-set notification-fields "gmt_refund" "2026-10-30 10:00:00"))])
+    (check-exn (bad-code? 'alipay-refund-unsupported)
+               (lambda () (verify-alipay-notification
+                           (signed-form f) binding public-pem))))
+  (check-exn (bad-code? 'alipay-order-mismatch)
+             (lambda () (verify-alipay-notification
+                         (signed-form
+                          (hash-set notification-fields "auth_app_id"
+                                    "different-app"))
+                         binding public-pem)))
+  (check-exn (bad-code? 'alipay-notification-invalid)
+             (lambda () (verify-alipay-notification
+                         (signed-form
+                          (hash-set notification-fields "notify_type"
+                                    "fund_auth_freeze"))
+                         binding public-pem))))
+
 (test-case "page-pay request signs canonical fields and uses a server-bound offer"
   (define fields
     (make-alipay-page-pay-parameters
@@ -167,7 +187,8 @@
   (check-equal? (hash-ref (string->jsexpr (hash-ref fields "biz_content"))
                           'total_amount) "19.90")
   (define signed-bytes
-    (string->bytes/utf-8 (alipay-canonical-parameters fields)))
+    (string->bytes/utf-8
+     (alipay-canonical-parameters fields #:notification? #f)))
   (check-true
    (parameterize ([crypto-factories (list libcrypto-factory)])
      (digest/verify
