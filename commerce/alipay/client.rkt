@@ -4,6 +4,7 @@
 ;; The browser and application must never get merchant signing keys.
 (provide make-alipay-merchant-client
          alipay-merchant-client?
+         alipay-client-verify-notification
          alipay-query-payment
          alipay-query-and-journal!)
 
@@ -89,6 +90,12 @@
       (string-append (form-escape key) "="
                      (form-escape (hash-ref params key))))
     "&")))
+
+(define (alipay-client-verify-notification client raw binding)
+  (unless (alipay-merchant-client? client)
+    (reject 'alipay-merchant-config-invalid "invalid Alipay merchant client"))
+  (verify-alipay-notification
+   raw binding (alipay-merchant-client-public-key client)))
 
 (define (alipay-query-payment client binding timestamp observed-at
                               #:notification [notice #f])
