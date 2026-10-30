@@ -8,6 +8,8 @@
  alipay-signing-content
  parse-alipay-form
  make-alipay-page-pay-parameters
+ make-alipay-trade-query-parameters
+ verify-alipay-trade-query-response
  alipay-cny->fen
  (struct-out alipay-binding)
  (struct-out alipay-confirmed-order)
@@ -242,6 +244,152 @@
   (cons (cons "sign"
               (bytes->string/utf-8 (base64-encode signature #:line #f)))
         fields))
+
+;; A signed query request identifies the exact, durably bound merchant
+;; order. The response is authenticated independently using the Alipay
+;; PUBLIC key and the response-node's literal JSON bytes.
+(define (make-alipay-trade-query-parameters binding private-key
+                                           #:timestamp timestamp)
+  (unless (alipay-binding? binding)
+    (raise-argument-error 'make-alipay-trade-query-parameters
+                          "alipay-binding?" binding))
+  (unless (and (string? timestamp)
+               (regexp-match?
+                #px"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$"
+                timestamp))
+    (fail 'alipay-query-invalid "invalid Alipay query timestamp"))
+  (define fields
+    (list
+     (cons "app_id" (alipay-binding-app-id binding))
+     (cons "method" "alipay.trade.query")
+     (cons "format" "JSON")
+     (cons "charset" "utf-8")
+     (cons "sign_type" "RSA2")
+     (cons "timestamp" timestamp)
+     (cons "version" "1.0")
+     (cons "biz_content"
+           (jsexpr->string
+            (hasheq 'out_trade_no (alipay-binding-order-id binding))))))
+  (define signature
+    (with-handlers ([exn:fail?
+                     (lambda (_)
+                       (fail 'alipay-query-signing-failed
+                             "Alipay query request signature unavailable"))])
+      (parameterize ([crypto-factories (list libcrypto-factory)])
+        (digest/sign private-key 'sha256
+                     (string->bytes/utf-8
+                      (alipay-signing-content fields))
+                     #:pad 'pkcs1-v1.5))))
+  (cons (cons "sign"
+              (bytes->string/utf-8 (base64-encode signature #:line #f)))
+        fields))
+
+;; Scan the exact returned JSON value; JSON->hash->JSON reserialization
+;; changes key ordering, whitespace, escaped slashes and the signed bytes.
+;; Accept precisely { "alipay_trade_query_response": {...}, "sign": "..." }.
+;; Certificate-mode response metadata is NOT admitted in this public-key
+;; mode, so it must not be silently interpreted as public-key mode.
+(define (query-response-signed-fragment raw)
+  (unless (bytes? raw)
+    (raise-argument-error 'verify-alipay-trade-query-response "bytes?" raw))
+  (when (> (bytes-length raw) 65536)
+    (fail 'alipay-query-invalid "Alipay query response too large"))
+  (define txt
+    (with-handlers ([exn:fail?
+                     (lambda (_) (fail 'alipay-query-invalid
+                                       "Alipay query response is not UTF-8"))])
+      (bytes->string/utf-8 raw)))
+  (define prefix
+    (regexp-match-positions
+     #px"^[ \t\r\n]*\\{[ \t\r\n]*\"alipay_trade_query_response\"[ \t\r\n]*:"
+     txt))
+  (unless prefix
+    (fail 'alipay-query-invalid "missing signed Alipay query response"))
+  (define length* (string-length txt))
+  (define (whitespace? ch)
+    (or (char=? ch #\space) (char=? ch #\tab)
+        (char=? ch #\return) (char=? ch #\newline)))
+  (define begin*
+    (let skip ([i (cdar prefix)])
+      (if (and (< i length*) (whitespace? (string-ref txt i)))
+          (skip (add1 i)) i)))
+  (unless (and (< begin* length*) (char=? (string-ref txt begin*) #\{))
+    (fail 'alipay-query-invalid "query response must be an object"))
+  (define end*
+    (let loop ([i begin*] [level 0] [quoted? #f] [escaped? #f])
+      (when (>= i length*)
+        (fail 'alipay-query-invalid "unterminated Alipay query response"))
+      (define ch (string-ref txt i))
+      (cond
+        [quoted?
+         (cond
+           [escaped? (loop (add1 i) level #t #f)]
+           [(char=? ch #\\) (loop (add1 i) level #t #t)]
+           [(char=? ch #\") (loop (add1 i) level #f #f)]
+           [else (loop (add1 i) level #t #f)])]
+        [(char=? ch #\") (loop (add1 i) level #t #f)]
+        [(char=? ch #\{) (loop (add1 i) (add1 level) #f #f)]
+        [(char=? ch #\})
+         (if (= level 1) (add1 i)
+             (loop (add1 i) (sub1 level) #f #f))]
+        [else (loop (add1 i) level #f #f)])))
+  (define tail (substring txt end*))
+  (define matches
+    (regexp-match
+     #px"^[ \t\r\n]*,[ \t\r\n]*\"sign\"[ \t\r\n]*:[ \t\r\n]*\"([A-Za-z0-9+/]+={0,2})\"[ \t\r\n]*\\}[ \t\r\n]*$"
+     tail))
+  (unless matches
+    (fail 'alipay-query-invalid "unexpected Alipay response envelope"))
+  (values (substring txt begin* end*) (cadr matches)))
+
+(define (verify-alipay-trade-query-response raw public-key-pem binding)
+  (unless (alipay-binding? binding)
+    (raise-argument-error 'verify-alipay-trade-query-response
+                          "alipay-binding?" binding))
+  (define-values (content sign)
+    (query-response-signed-fragment raw))
+  (define authentic?
+    (with-handlers ([exn:fail? (lambda (_) #f)])
+      (digest/verify
+       (read-public public-key-pem)
+       'sha256
+       (string->bytes/utf-8 content)
+       (base64-decode (string->bytes/utf-8 sign))
+       #:pad 'pkcs1-v1.5)))
+  (unless authentic?
+    (fail 'alipay-query-signature-invalid
+          "invalid signed Alipay trade query response"))
+  (define decoded
+    (with-handlers ([exn:fail?
+                     (lambda (_) (fail 'alipay-query-invalid
+                                       "invalid signed Alipay query JSON"))])
+      (string->jsexpr content)))
+  (unless (hash? decoded)
+    (fail 'alipay-query-invalid "Alipay query result is not an object"))
+  (define (required name)
+    (define value (hash-ref decoded name #f))
+    (unless (nonblank? value)
+      (fail 'alipay-query-invalid "missing Alipay query result field"))
+    value)
+  (unless (equal? (required 'code) "10000")
+    (fail 'alipay-query-rejected "Alipay trade query was rejected"))
+  (define order (required 'out_trade_no))
+  (define trade (required 'trade_no))
+  (define status (required 'trade_status))
+  (define total (alipay-cny->fen (required 'total_amount)))
+  (unless (and (equal? order (alipay-binding-order-id binding))
+               (= total (money-minor-units (alipay-binding-amount binding)))
+               (or (not (hash-has-key? decoded 'seller_id))
+                   (equal? (required 'seller_id)
+                           (alipay-binding-seller-id binding))))
+    (fail 'alipay-order-mismatch
+          "signed Alipay query result differs from merchant checkout"))
+  ;; The merchant application identity comes from the *request binding*;
+  ;; alipay.trade.query does not necessarily echo app_id in its response.
+  (alipay-confirmed-order
+   (alipay-binding-app-id binding)
+   (alipay-binding-seller-id binding)
+   order trade status total))
 
 ;; The active query must be checked against the *same* persisted binding,
 ;; not trusted from an arbitrary service callback. This first slice handles
