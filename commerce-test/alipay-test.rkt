@@ -3,6 +3,7 @@
 (require base64
          commerce
          commerce/alipay/server
+         commerce/alipay/client
          commerce/journal
          commerce/storage
          commerce/storage/sqlite
@@ -346,3 +347,44 @@
         (check-equal? unavailable-body #"failure"))
       (lambda () (storage-close storage))))
    (lambda () (delete-directory/files temp-dir))))
+
+(test-case "real query transport contract signs request and verifies response"
+  (define called 0)
+  (define client
+    (make-alipay-query-client
+     #:app-id "2026000000000000"
+     #:merchant-private-key rsa-private-key
+     #:alipay-public-key public-key
+     #:environment 'sandbox
+     #:clock (lambda () "2026-10-30 12:30:00")
+     #:transport
+     (lambda (endpoint body)
+       (set! called (add1 called))
+       (check-equal?
+        endpoint "https://openapi-sandbox.dl.alipaydev.com/gateway.do")
+       (define params (parse-alipay-form body))
+       (check-equal? (cdr (assoc "method" params)) "alipay.trade.query")
+       (check-true
+        (digest/verify
+         (pk-key->public-only-key rsa-private-key)
+         'sha256
+         (string->bytes/utf-8 (alipay-signing-content params))
+         (base64-decode
+          (string->bytes/utf-8 (cdr (assoc "sign" params))))
+         #:pad 'pkcs1-v1.5))
+       (values 200 (signed-query-response)))))
+  (check-equal?
+   (fetch-alipay-trade-query-response client binding)
+   (signed-query-response))
+  (check-equal? called 1)
+  (define offline
+    (make-alipay-query-client
+     #:app-id "2026000000000000"
+     #:merchant-private-key rsa-private-key
+     #:alipay-public-key public-key
+     #:environment 'production
+     #:clock (lambda () "2026-10-30 12:30:00")
+     #:transport (lambda _ (error 'network "private transport detail"))))
+  (check-exn (code? 'alipay-query-unavailable)
+             (lambda ()
+               (fetch-alipay-trade-query-response offline binding))))
