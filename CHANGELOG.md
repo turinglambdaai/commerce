@@ -32,10 +32,12 @@ All notable changes to Commerce are documented here.
   collection: signed page-pay parameter construction, strict decoded POST
   form parsing (including duplicate-key/UTF-8 rejection), exact CNY
   minor-unit checks, native signature and checkout-binding validation.
-  A signed callback remains an opaque notice, not a verified payment or
-  Permit-issuance event until authenticated active order proof and durable
-  journal integration are implemented. Ship negative tests and a
-  provider-specific go-live handoff document.
+  A signed callback remains an opaque notice, not verified payment evidence.
+  Add merchant-signed `alipay.trade.query`, exact raw-JSON response RSA2
+  verification, bound CNY/order/trade status proof, timeout-bounded no-retry
+  HTTPS query, and durable journal acceptance with replay tests. The HTTP
+  notification edge, full/partial refunds, merchant admission and real
+  payment-to-Permit claim remain distinct unfinished release gates.
 
 
 - Add role-separated Commerce service startup: the HTTP edge no longer needs
