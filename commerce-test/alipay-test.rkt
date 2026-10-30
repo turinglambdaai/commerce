@@ -2,7 +2,8 @@
 
 (require commerce
          commerce/alipay
-         rackunit)
+         rackunit
+         racket/string)
 
 ;; Synthetic signed RSA2 fixture. The signing private key was generated
 ;; transiently offline and was never committed.
@@ -115,3 +116,22 @@ PEM
                   n binding bad
                   #:payload-digest (make-string 64 #\a)
                   #:occurred-at 1793376000)))))
+
+(test-case "HTTP form parser preserves UTF-8, plus, escape and duplicates"
+  (check-equal? (parse-alipay-form #"a=hello+world&b=%E4%B8%AD&c=a%2Bb")
+                (list (cons "a" "hello world")
+                      (cons "b" "中")
+                      (cons "c" "a+b")))
+  (check-exn (code? 'alipay-duplicate-field)
+             (lambda () (parse-alipay-form #"app_id=good&app_id=evil")))
+  (for ([bad (list #"" #"noequals" #"a=1&" #"a=%FG"
+                    #"a=%E4%B8" #"a=%" #"a=1=b")])
+    (check-exn (code? 'alipay-form-invalid)
+               (lambda () (parse-alipay-form bad))))
+  (check-exn (code? 'alipay-form-invalid)
+             (lambda () (parse-alipay-form (make-bytes 65537 97))))
+  (check-exn (code? 'alipay-form-invalid)
+             (lambda ()
+               (parse-alipay-form
+                (string->bytes/utf-8
+                 (string-join (make-list 129 "a=1") "&"))))))
