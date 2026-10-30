@@ -57,10 +57,39 @@
   (alipay-binding "2026000000000000" "2088000000000000"
                   "order_test_001" "taskly-pro-lifetime"
                   "subject-1" (money "CNY" 1234)))
+(define (signed-query-response
+         #:app [app "2026000000000000"]
+         #:seller [seller "2088000000000000"]
+         #:order [order "order_test_001"]
+         #:trade [trade "202610301234567890"]
+         #:status [status "TRADE_SUCCESS"]
+         #:amount [amount "12.34"]
+         #:code [code "10000"])
+  (define json-content
+    (jsexpr->string
+     (hasheq 'code code
+             'app_id app
+             'seller_id seller
+             'out_trade_no order
+             'trade_no trade
+             'trade_status status
+             'total_amount amount)))
+  (define signature
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (digest/sign rsa-private-key 'sha256
+                   (string->bytes/utf-8 json-content)
+                   #:pad 'pkcs1-v1.5)))
+  (string->bytes/utf-8
+   (string-append
+    "{\"alipay_trade_query_response\":"
+    json-content
+    ",\"sign\":\""
+    (bytes->string/utf-8 (base64-encode signature #:line #f))
+    "\"}")))
+
 (define queried
-  (alipay-confirmed-order "2026000000000000" "2088000000000000"
-                          "order_test_001" "202610301234567890"
-                          "TRADE_SUCCESS" 1234))
+  (verify-alipay-trade-query-response
+   (signed-query-response) public-key binding))
 
 (test-case "RSA2 fixture and exact canonical representation"
   (check-equal?
@@ -112,27 +141,78 @@
                      signed-fields)
                 public-key))))
 
-(test-case "an authenticated notification without matching query cannot pay"
+(test-case "a signed query must match the immutable merchant binding"
   (define n (verify-alipay-notification signed-fields public-key))
-  (for ([bad (list
-              (alipay-confirmed-order "other-app" "2088000000000000"
-                                      "order_test_001" "202610301234567890"
-                                      "TRADE_SUCCESS" 1234)
-              (alipay-confirmed-order "2026000000000000" "2088000000000000"
-                                      "order_test_001" "202610301234567890"
-                                      "WAIT_BUYER_PAY" 1234)
-              (alipay-confirmed-order "2026000000000000" "2088000000000000"
-                                      "order_test_001" "other-trade"
-                                      "TRADE_SUCCESS" 1234)
-              (alipay-confirmed-order "2026000000000000" "2088000000000000"
-                                      "order_test_001" "202610301234567890"
-                                      "TRADE_SUCCESS" 1235))])
-    (check-exn (code? 'alipay-order-mismatch)
-               (lambda ()
-                 (confirm-alipay-onetime-payment
-                  n binding bad
-                  #:payload-digest (make-string 64 #\a)
-                  #:occurred-at 1793376000)))))
+  (for ([raw (in-list
+              (list
+               (signed-query-response #:app "wrong-app")
+               (signed-query-response #:seller "wrong-seller")
+               (signed-query-response #:order "wrong-order")
+               (signed-query-response #:amount "12.35")))])
+    (check-exn
+     (code? 'alipay-order-mismatch)
+     (lambda ()
+       (verify-alipay-trade-query-response raw public-key binding))))
+  (check-exn
+   (code? 'alipay-query-rejected)
+   (lambda ()
+     (verify-alipay-trade-query-response
+      (signed-query-response #:code "40004") public-key binding)))
+  (define waiting
+    (verify-alipay-trade-query-response
+     (signed-query-response #:status "WAIT_BUYER_PAY") public-key binding))
+  (check-exn
+   (code? 'alipay-order-mismatch)
+   (lambda ()
+     (confirm-alipay-onetime-payment
+      n binding waiting
+      #:payload-digest (make-string 64 #\a)
+      #:occurred-at 1793376000)))
+  (define raw (signed-query-response))
+  (check-exn
+   (code? 'alipay-query-signature-invalid)
+   (lambda ()
+     (verify-alipay-trade-query-response
+      (bytes-append raw #" ")
+      "invalid-public-key"
+      binding)))
+  (define tampered
+    (string->bytes/utf-8
+     (string-replace
+      (bytes->string/utf-8 raw)
+      "TRADE_SUCCESS" "TRADE_CLOSED")))
+  (check-exn
+   (code? 'alipay-query-signature-invalid)
+   (lambda ()
+     (verify-alipay-trade-query-response tampered public-key binding)))
+  (define extra
+    (bytes-append (subbytes raw 0 (sub1 (bytes-length raw)))
+                  #",\"untrusted\":true}"))
+  (check-exn
+   (code? 'alipay-query-invalid)
+   (lambda ()
+     (verify-alipay-trade-query-response extra public-key binding)))
+  (check-equal? (alipay-confirmed-order-trade-id queried)
+                "202610301234567890"))
+
+(test-case "trade query request is signed for exactly this merchant order"
+  (define params
+    (make-alipay-trade-query-parameters
+     binding rsa-private-key #:timestamp "2026-10-30 12:30:00"))
+  (check-equal? (cdr (assoc "method" params)) "alipay.trade.query")
+  (check-equal? (hash-ref
+                 (string->jsexpr (cdr (assoc "biz_content" params)))
+                 'out_trade_no)
+                "order_test_001")
+  (check-true
+   (digest/verify
+    (pk-key->public-only-key rsa-private-key)
+    'sha256
+    (string->bytes/utf-8 (alipay-signing-content params))
+    (base64-decode
+     (string->bytes/utf-8 (cdr (assoc "sign" params))))
+    #:pad 'pkcs1-v1.5)))
+
 
 (test-case "HTTP form parser preserves UTF-8, plus, escape and duplicates"
   (check-equal? (parse-alipay-form #"a=hello+world&b=%E4%B8%AD&c=a%2Bb")
