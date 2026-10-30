@@ -57,6 +57,13 @@ one approved channel never admits another.
   requiring an approved account and a demonstrated product gap.
   Commerce does not model ZPAY as recurring unless the live provider
   contract gains that capability.
+- **Alipay Vibe Pay basic collection: not admitted.** Racket RSA2 checkout,
+  notification and active-query protocol paths are in development. Personal
+  developer application eligibility, app/merchant approval, payment methods,
+  CNY one-time limits, transaction/settlement fees, refunds and approved
+  sandbox/live credentials are not established by this fixture-tested code.
+  The Alipay-managed smart collection suite is a separate provider/product
+  business model and must not silently replace Commerce's own Permit rights.
 
 ## Consequences
 
