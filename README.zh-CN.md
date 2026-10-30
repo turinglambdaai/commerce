@@ -125,7 +125,8 @@ Commerce 只保存确定性编排需要的标识、投影和审计证据。
 (require commerce/journal)   ; 持久事件接收契约
 (require commerce/storage)   ; 持久投影/outbox 操作
 (require commerce/storage/sqlite) ; SQLite 服务存储后端
-(require commerce/pancake)   ; Pancake 鉴权与主动订单证明
+(require commerce/pancake)
+(require commerce/alipay)   ; 支付宝 RSA2 下单参数及签名通知验证   ; Pancake 鉴权与主动订单证明
 (require commerce/permit)    ; 经审阅的 Offer policy 到 Permit 快照
 (require commerce/issuer)    ; 显式签发 worker：认领、签名、交付
 (require commerce/operator)  ; 运营 find/explain/redrive 面
