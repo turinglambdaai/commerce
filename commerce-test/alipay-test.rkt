@@ -12,6 +12,7 @@
          crypto/libcrypto
          json
          rackunit
+         racket/file
          racket/list
          racket/string)
 
