@@ -9,22 +9,23 @@
          rackunit
          racket/string)
 
-;; Synthetic signed RSA2 fixture. The signing private key was generated
-;; transiently offline and was never committed.
-(define public-key #<<PEM
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr65y9BKS22z8BeyE3zYc
-0wLtVCFRdWVjvO09N3ub7K2iZmFLeK6pTF6x/dStAOnrR+1uJ5nbELwFmuC+x1sp
-A+cdZ2dSbNVCfaNaoMujq2O7CmortHJrUCm7A6cEE2PfqxgqgeRZg/rj+MZOZSN6
-yWbvfkHEISy5its4con6CFbMJW8WHvuBYVJZMwRQBu1NWajXMcM52Frj6ROcpIWF
-lkyFEpB9MNUgjZapqX8kJXVr3naLZHseZ7eA/GSQfwWInzvAxjCVoLZMy0X8myDC
-z31IAPwyhZWnNYq6qfnbA7f0c+9JVta9V+DWc8+6CgqWFa2MFZXJypvzL5LBD665
-LQIDAQAB
------END PUBLIC KEY-----
-PEM
-  )
+;; Generate fixture key material during the test, never commit a private key
+;; or accept a string that has not actually passed RSA2 verification.
+(define rsa-private-key
+  (parameterize ([crypto-factories (list libcrypto-factory)])
+    (generate-private-key (get-pk 'rsa) '((nbits 2048)))))
 
-(define signed-fields
+(define (public-key->pem key)
+  (string-append
+   "-----BEGIN PUBLIC KEY-----\n"
+   (bytes->string/utf-8
+    (base64-encode (pk-key->datum key 'SubjectPublicKeyInfo) #:line #f))
+   "\n-----END PUBLIC KEY-----\n"))
+
+(define public-key
+  (public-key->pem (pk-key->public-only-key rsa-private-key)))
+
+(define unsigned-fields
   (list (cons "total_amount" "12.34")
         (cons "seller_id" "2088000000000000")
         (cons "out_trade_no" "order_test_001")
@@ -32,8 +33,20 @@ PEM
         (cons "notify_id" "notify_test_001")
         (cons "trade_no" "202610301234567890")
         (cons "trade_status" "TRADE_SUCCESS")
-        (cons "sign_type" "RSA2")
-        (cons "sign" "L4tj82zmupC6E7mThfNrz7PzB6ihu8HIDbS6EG+DtMveFsEVBTInv7FwSym2TKlA1FC1Z1Gzo55PVPv7VTRxCWIMD/FMcTFcqic/pHiHtvZCfTqWM2g8NT/CWXZXA7t1sGuwjZs7HBHT7g5iVJx1DPbN38RxMEMy20O0JPe1grj6XfNEntMMDXf9xeSvRUjCL7B1SSJ+vZwGwfUM/+ZWEB2PPR8MAS1StjmX15cEKFPavH4sAx7NjHw+xlvPTZwnFQraTFKB1ZyJnPB+8cSe7rAZzszSIdKMMqWhe/v+GNXTelfqtXTK4BoZP4yLUIErXdz/po3YVTOFmqX4vnp5LA==")))
+        (cons "sign_type" "RSA2")))
+
+(define signed-fields
+  (cons
+   (cons "sign"
+         (bytes->string/utf-8
+          (base64-encode
+           (parameterize ([crypto-factories (list libcrypto-factory)])
+             (digest/sign rsa-private-key 'sha256
+                          (string->bytes/utf-8
+                           (alipay-signing-content unsigned-fields))
+                          #:pad 'pkcs1-v1.5))
+           #:line #f)))
+   unsigned-fields))
 
 (define (code? code)
   (lambda (e)
