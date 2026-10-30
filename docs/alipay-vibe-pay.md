@@ -14,7 +14,8 @@
 confirmation **boundary**. It has no network side effects and never reads a
 merchant private key.
 
-1. Accept a **duplicate-preserving decoded field association list**. Reject
+1. Parse bounded HTTP form bytes with `parse-alipay-form` into a
+   **duplicate-preserving decoded field association list**. Reject
    duplicate field names, missing signature, non-RSA2 mode and invalid RSA2
    signature. Build the ordered `key=value&...` signing representation
    excluding `sign` and `sign_type`. Verify using the pinned Alipay public
@@ -39,9 +40,8 @@ merchant private key.
 - Hosting and signed generation of `alipay.trade.page.pay` payment requests;
   generated orders must use collision-safe `out_trade_no` and server-priced
   immutable Offer IDs.
-- A duplicate-preserving HTTP `application/x-www-form-urlencoded` parser,
-  bounds and canonicalization for actual Alipay notification bodies,
-  certificate-mode and key-rotation support.
+- Production integration of the form parser into a verified HTTP ingress
+  with request/content-type limits, certificate-mode and key rotation.
 - Active `alipay.trade.query` signed API client/response verifier,
   retry/reconciliation and durable checkout bindings.
 - Asynchronous HTTP notification endpoint, raw payload digest, idempotent
