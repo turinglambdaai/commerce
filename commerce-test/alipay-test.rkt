@@ -301,7 +301,7 @@
              (signed-query-response))
            #:storage storage))
         ;; The original notification contains base64 + / = and a payment
-        ;; timestamp with spaces; a real HTTP form must preserve all of it.
+        ;; timestamp with spaces; escape literal plus before form-encoding spaces.
         (define (escape-value v)
           (string-replace
            (string-replace
@@ -315,7 +315,7 @@
             (for/list ([pair (in-list signed-fields)])
               (string-append
                (car pair) "="
-               (escape-value (string-replace (cdr pair) " " "+"))))
+               (string-replace (escape-value (cdr pair)) " " "+")))
             "&")))
         (define-values (first-status first-body)
           (handle-alipay-webhook-post endpoint payload))
