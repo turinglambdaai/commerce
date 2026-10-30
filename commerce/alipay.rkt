@@ -26,6 +26,7 @@
          crypto/libcrypto
          crypto/pem
          racket/list
+         racket/format
          racket/string
          (only-in "provider.rkt" make-verified-payment-event)
          "private/model.rkt")
