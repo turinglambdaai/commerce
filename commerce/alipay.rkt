@@ -7,6 +7,7 @@
 (provide
  alipay-signing-content
  parse-alipay-form
+ make-alipay-page-pay-parameters
  alipay-cny->fen
  (struct-out alipay-binding)
  (struct-out alipay-confirmed-order)
@@ -21,6 +22,7 @@
 
 (require base64
          crypto
+         json
          crypto/libcrypto
          crypto/pem
          racket/list
@@ -180,6 +182,64 @@
    (nonblank-field fields "trade_no")
    (nonblank-field fields "trade_status")
    amount))
+
+;; The gateway form is built server-side from the durable checkout binding.
+;; The caller sends these signed parameters to its *approved* Alipay gateway.
+;; This pure builder never makes a network request and does not store the key.
+(define (make-alipay-page-pay-parameters binding private-key
+                                         #:title title
+                                         #:notify-url notify-url
+                                         #:return-url return-url
+                                         #:timestamp timestamp)
+  (unless (alipay-binding? binding)
+    (raise-argument-error 'make-alipay-page-pay-parameters
+                          "alipay-binding?" binding))
+  (unless (and (nonblank? title) (<= (string-length title) 256)
+               (nonblank? timestamp)
+               (regexp-match?
+                #px"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$"
+                timestamp)
+               (andmap (lambda (x)
+                         (and (string? x) (string-prefix? x "https://")
+                              (not (regexp-match? #px"[\\r\\n]" x))))
+                       (list notify-url return-url)))
+    (fail 'alipay-checkout-invalid "invalid server-side checkout settings"))
+  (define amount (money-minor-units (alipay-binding-amount binding)))
+  (unless (> amount 0)
+    (fail 'alipay-checkout-invalid "cannot charge zero CNY"))
+  (define amount-text
+    (format "~a.~a" (quotient amount 100)
+            (~r (remainder amount 100) #:min-width 2 #:pad-string "0")))
+  (define business
+    (jsexpr->string
+     (hasheq 'out_trade_no (alipay-binding-order-id binding)
+             'total_amount amount-text
+             'subject title
+             'product_code "FAST_INSTANT_TRADE_PAY")))
+  (define fields
+    (list (cons "app_id" (alipay-binding-app-id binding))
+          (cons "method" "alipay.trade.page.pay")
+          (cons "format" "JSON")
+          (cons "charset" "utf-8")
+          (cons "sign_type" "RSA2")
+          (cons "timestamp" timestamp)
+          (cons "version" "1.0")
+          (cons "notify_url" notify-url)
+          (cons "return_url" return-url)
+          (cons "biz_content" business)))
+  (define signature
+    (with-handlers ([exn:fail?
+                     (lambda (_)
+                       (fail 'alipay-checkout-signing-failed
+                             "could not sign Alipay checkout request"))])
+      (parameterize ([crypto-factories (list libcrypto-factory)])
+        (digest/sign private-key 'sha256
+                     (string->bytes/utf-8
+                      (alipay-signing-content fields))
+                     #:pad 'pkcs1-v1.5))))
+  (cons (cons "sign"
+              (bytes->string/utf-8 (base64-encode signature #:line #f)))
+        fields))
 
 ;; The active query must be checked against the *same* persisted binding,
 ;; not trusted from an arbitrary service callback. This first slice handles
