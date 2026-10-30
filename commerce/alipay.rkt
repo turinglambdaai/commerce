@@ -168,7 +168,9 @@
 
 (define (verify-alipay-notification fields public-key-pem)
   (checked-fields 'verify-alipay-notification fields)
-  (unless (and (nonblank? public-key-pem)
+  ;; PEM armour is multiline, unlike provider field values.
+  (unless (and (string? public-key-pem)
+               (positive? (string-length public-key-pem))
                (equal? (field fields "sign_type") "RSA2"))
     (fail 'alipay-signature-invalid "invalid Alipay RSA2 signature mode"))
   (define signature
