@@ -141,6 +141,7 @@ only the identifiers and projections required for deterministic orchestration.
 (require commerce/pancake)   ; Pancake authentication and active order proof
 (require commerce/alipay)   ; Alipay RSA2 checkout, notification and trade-query proof
 (require commerce/alipay/client) ; bounded merchant HTTPS query and journal acceptance
+(require commerce/alipay/server) ; separate notify_url listener, journal-first success ack
 (require commerce/permit)    ; reviewed Offer policy to Permit snapshots
 (require commerce/issuer)    ; explicit issuer worker: claim, sign, deliver
 (require commerce/operator)  ; operator find/explain/redrive surface
