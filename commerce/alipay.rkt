@@ -78,27 +78,26 @@
   (unless (and (money? value) (string=? (money-currency value) "CNY")
                (<= 1 (money-minor-units value) max-cny-fen))
     (reject 'alipay-amount-invalid "invalid CNY payment amount"))
-  (define n (money-minor-units value))
-  (string-append (number->string (quotient n 100)) "."
-                 (if (< (remainder n 100) 10) "0" "")
-                 (number->string (remainder n 100))))
+  (let ([n (money-minor-units value)])
+    (string-append (number->string (quotient n 100)) "."
+                   (if (< (remainder n 100) 10) "0" "")
+                   (number->string (remainder n 100)))))
 
 (define (alipay-parse-cny text)
   (unless (and (string? text)
                (regexp-match? #px"^(?:0|[1-9][0-9]{0,8})(?:[.][0-9]{1,2})?$" text))
     (reject 'alipay-amount-invalid "invalid Alipay decimal amount"))
-  (define parts (string-split text "." #:trim? #f))
-  (define fen
-    (+ (* 100 (string->number (car parts)))
-       (if (null? (cdr parts))
-           0
-           (string->number
-            (if (= (string-length (cadr parts)) 1)
-                (string-append (cadr parts) "0")
-                (cadr parts))))))
-  (unless (<= 1 fen max-cny-fen)
-    (reject 'alipay-amount-invalid "Alipay amount outside approved bounds"))
-  (money "CNY" fen))
+  (let* ([parts (string-split text "." #:trim? #f)]
+         [fen (+ (* 100 (string->number (car parts)))
+                 (if (null? (cdr parts))
+                     0
+                     (string->number
+                      (if (= (string-length (cadr parts)) 1)
+                          (string-append (cadr parts) "0")
+                          (cadr parts)))))])
+    (unless (<= 1 fen max-cny-fen)
+      (reject 'alipay-amount-invalid "Alipay amount outside approved bounds"))
+    (money "CNY" fen)))
 
 (define (hex-digit n)
   (cond [(<= 48 n 57) (- n 48)]
@@ -117,12 +116,12 @@
              [(= c 37)
               (when (>= (+ i 2) (bytes-length raw))
                 (reject 'alipay-form-invalid "malformed percent escape"))
-              (define high (hex-digit (bytes-ref raw (add1 i))))
-              (define low (hex-digit (bytes-ref raw (+ i 2))))
-              (unless (and high low)
-                (reject 'alipay-form-invalid "malformed percent escape"))
-              (write-byte (+ (* high 16) low) out)
-              (loop (+ i 3))]
+              (let ([high (hex-digit (bytes-ref raw (add1 i)))]
+                    [low (hex-digit (bytes-ref raw (+ i 2)))])
+                (unless (and high low)
+                  (reject 'alipay-form-invalid "malformed percent escape"))
+                (write-byte (+ (* high 16) low) out)
+                (loop (+ i 3)))]
              [else
               (write-byte (if (= c 43) 32 c) out)
               (loop (add1 i))]))))))
@@ -136,23 +135,23 @@
     (reject 'alipay-form-invalid "Alipay notification requires raw bytes"))
   (unless (<= 1 (bytes-length raw) max-form-bytes)
     (reject 'alipay-form-invalid "Alipay notification exceeds size limit"))
-  (define parts (regexp-split #rx#"&" raw))
-  (when (> (length parts) max-params)
-    (reject 'alipay-form-invalid "too many Alipay form fields"))
-  (for/fold ([params (hash)]) ([part (in-list parts)])
-    (define pos
-      (for/first ([i (in-range (bytes-length part))]
-                  #:when (= 61 (bytes-ref part i)))
-        i))
-    (unless (and pos (> pos 0))
-      (reject 'alipay-form-invalid "malformed Alipay form field"))
-    (define name (decode-form-part (subbytes part 0 pos)))
-    (define value (decode-form-part (subbytes part (add1 pos))))
-    (unless (regexp-match? #px"^[A-Za-z][A-Za-z0-9_]*$" name)
-      (reject 'alipay-form-invalid "invalid Alipay field name"))
-    (when (hash-has-key? params name)
-      (reject 'alipay-form-invalid "duplicate Alipay form field"))
-    (hash-set params name value)))
+  (let ([parts (regexp-split #rx#"&" raw)])
+    (when (> (length parts) max-params)
+      (reject 'alipay-form-invalid "too many Alipay form fields"))
+    (for/fold ([params (hash)]) ([part (in-list parts)])
+      (define pos
+        (for/first ([i (in-range (bytes-length part))]
+                    #:when (= 61 (bytes-ref part i)))
+          i))
+      (unless (and pos (> pos 0))
+        (reject 'alipay-form-invalid "malformed Alipay form field"))
+      (let* ([name (decode-form-part (subbytes part 0 pos))]
+             [value (decode-form-part (subbytes part (add1 pos)))])
+        (unless (regexp-match? #px"^[A-Za-z][A-Za-z0-9_]*$" name)
+          (reject 'alipay-form-invalid "invalid Alipay field name"))
+        (when (hash-has-key? params name)
+          (reject 'alipay-form-invalid "duplicate Alipay form field"))
+        (hash-set params name value)))))
 
 (define (alipay-canonical-parameters params)
   (unless (and (hash? params)
