@@ -119,15 +119,15 @@
            [(not (equal? (request-method request) #"post"))
             (problem 405 "method not allowed")]
            [else
-            (define content-type
-              (headers-assq* #"content-type" (request-headers/raw request)))
-            (if (and content-type
-                     (regexp-match?
-                      #rx#"^application/x-www-form-urlencoded(?:;|$)"
-                      (header-value content-type)))
-                (handle-alipay-webhook-post
-                 endpoint (or (request-post-data/raw request) #""))
-                (problem 415 "unsupported media type"))]))
+            (let ([content-type
+                   (headers-assq* #"content-type" (request-headers/raw request))])
+              (if (and content-type
+                       (regexp-match?
+                        #px#"^application/x-www-form-urlencoded(?:;|$)"
+                        (header-value content-type)))
+                  (handle-alipay-webhook-post
+                   endpoint (or (request-post-data/raw request) #""))
+                  (problem 415 "unsupported media type")))]))
        (response/full
         status
         #"Commerce"
