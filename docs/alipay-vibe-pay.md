@@ -40,33 +40,52 @@ or implies eligibility for personal software/AI services.
   Return an opaque \`alipay-notification\`, never a \`payment-event\`.
   Use separate official public keys/configuration for sandbox and production.
 
-## Not yet implemented: NO issuance on callback alone
+## Signed active query: implemented protocol proof, not network transport
 
-Alipay's official web integration explicitly requires querying actual
-trade status when the browser return or callback is missing. A signed
-\`notify_url\` response still needs production order lookup validation and
-durable journal acceptance. The current adapter intentionally has **no**
-function that can convert a callback into verified Commerce payment facts.
+- \`make-alipay-trade-query-parameters\` signs a bound
+  \`alipay.trade.query\` request (including \`sign_type=RSA2\`) for the
+  merchant service to submit via the configured HTTPS gateway.
+- \`verified-alipay-trade-query->payment-event\` verifies the signed **raw
+  JSON response object** from the standard public-key mode, rather than
+  parsing and reserializing JSON for signature verification. It then checks
+  \`code=10000\`, paid trade status, merchant \`out_trade_no\`, exact CNY
+  amount, optional app/seller identity and the notification's trade number
+  when one was received. Duplicate critical fields, certificate-mode
+  variations, invalid signatures, unpaid and refund-bearing responses
+  fail closed. Query-only reconciliation can recover a missing notification.
+- A successfully verified active-query result is an ordinary
+  \`commerce/payment-event\` with provider \`alipay\`. The caller must
+  preserve the same raw signed query response bytes as its journal
+  evidence and call \`journal-accept!\` before any outbox projection.
+  \`observed-at\` is the worker's actual observation time, **not** a
+  fabricated payment date.
 
-Next slices, in order:
+**No network transport or webhook server is wired to these helpers yet.**
+The buyer/browser must never supply the query response or choose an
+arbitrary order. Only a merchant-authenticated HTTPS request to the
+official API, correlated to its server-side order binding, is suitable
+input. A signed \`notify_url\` notice alone *never* authorizes rights.
+The current mode supports only ordinary RSA2 public-key verification;
+certificate-mode/third-party delegation needs its own reviewed key and
+certificate binding before operation.
 
-1. Production-safe \`alipay.trade.query\` transport with RSA2 request
-   signing, signed response verification for the configured Alipay key/
-   certificate mode, status/amount/order/app/seller/trade-number matching,
-   typed timeout/refusal and bounded reconciliation. Use a testable injected
-   transport and no hidden retry after unknown payment outcome.
-2. Integrate authenticated query results with
-   \`make-verified-payment-event\`, \`journal-accept!\`, projection, outbox
-   and Permit claim delivery. The journal must preserve original bytes and
-   mark success only **after** its transaction commits.
-3. Refund/refund-query with stable refund request identifiers, money
-   conservation and separately modeled partial/full refund facts. An
-   Alipay \`TRADE_SUCCESS\` state alone does **not** prove no refund.
-4. Server HTTP \`notify_url\` endpoint: return exact \`success\` only
-   after durable acceptance; otherwise \`fail\` for provider retries.
-   Keep untrusted browser \`return_url\` informational.
-5. Approved merchant account, current application contract, fees/settlement,
-   test credentials, real sandbox and explicitly authorized low-value canary.
+## Remaining implementation and release gates
+
+1. Provide a timeout-bounded HTTPS query client for the currently
+   authorized merchant app, including response transport/correlation
+   handling and bounded reconciliation after lost notifications.
+2. Wire \`journal-accept!\`, SQLite projection/outbox and Permit issuance
+   to authenticated query results. Build the HTTP \`notify_url\` edge to
+   return exact \`success\` only after durable commit; otherwise \`fail\`
+   for retries. Keep \`return_url\` informational.
+3. Refund and refund-query with stable refund request identities,
+   correct *partial* and full refund accounting, conservation tests
+   and no silent rights overgrant. A paid trade status alone cannot
+   prove there has been no partial refund.
+4. Review provider approval and merchant account/product eligibility,
+   app/certificate configuration, costs and settlement, HTTPS deployment,
+   sandbox credentials, and an **explicitly authorized** low-value
+   end-to-end real transaction and recovery rehearsal.
    Commerce's [admission ADR](decisions/0019-provider-admission.md),
    [issue #5](https://github.com/turlamai/commerce/issues/5),
    [issue #10](https://github.com/turlamai/commerce/issues/10), and
