@@ -24,7 +24,6 @@
            commerce/server
            commerce/storage
            commerce/storage/sqlite
-           json
            permit/issuer
            racket/file
            racket/match
@@ -83,14 +82,22 @@
                 other)
        (exit 1)]))
 
+  ;; Reject production's combined web + signing process before loading any
+  ;; private key or opening the store. Two OS identities remain required.
+  (validate-service-role-environment! role environment)
+  ;; This example deliberately bundles a Taskly demo Offer. Until a real
+  ;; product replaces this entire example catalog with reviewed policy,
+  ;; production issuance must fail before reading any signing keys.
+  (reject-demo-catalog-in-production! role environment)
+
   ;; ---- trust and configuration ---------------------------------------
 
   (define private-key
     (and issuer? (read-ed25519-private-key private-key-path)))
+  ;; The issuer's trust store is security-sensitive: Permit rejects duplicate
+  ;; JSON members, malformed scalars and trailing bytes before parsing keys.
   (define trust-store
-    (and issuer?
-         (jsexpr->trust-store
-          (with-input-from-file trust-store-path read-json))))
+    (and issuer? (read-trust-store trust-store-path)))
 
   ;; PLACEHOLDER catalog: replace with the product's reviewed,
   ;; version-pinned policies. Policy ids are immutable; a rights change

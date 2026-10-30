@@ -61,6 +61,7 @@ operations. Do not duplicate a rule across several guides.
 - [ADR-0018: Deployment assembly](decisions/0018-deployment-assembly.md)
 - [ADR-0019: Provider admission precedes live checkout](decisions/0019-provider-admission.md)
 - [ADR-0020: Separated HTTP/issuer roles and residual shared-DB trust](decisions/0020-split-service-roles.md)
+- [ADR-0021 (proposal): Product-neutral hosted-service entitlement bridge](decisions/0021-hosted-service-entitlement-bridge-proposal.md) — consumer contract and security gates, **not implemented**
 
 ## Source entry points
 

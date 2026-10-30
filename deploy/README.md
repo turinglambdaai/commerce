@@ -5,8 +5,10 @@ Commerce ships as a Racket package with one role-selectable entrypoint,
 one SQLite store: `COMMERCE_ROLE=edge` handles webhooks and credential
 claims without reading Permit signing keys; `COMMERCE_ROLE=issuer` projects
 events and signs entitlements without starting an HTTP listener. The default
-`COMMERCE_ROLE=all` preserves the earlier combined walkthrough and is
-**not a key-isolated deployment**. See
+`COMMERCE_ROLE=all` preserves the earlier combined walkthrough in
+`COMMERCE_ENVIRONMENT=test` only; **production startup rejects combined
+mode**, even when it is the default. Explicitly select and provision both
+split roles for production. See
 [ADR-0020](../docs/decisions/0020-split-service-roles.md) for the remaining
 shared-database trust risk. TLS termination, rate limiting, and log shipping
 remain the reverse proxy/infrastructure's responsibility
@@ -19,7 +21,7 @@ once at startup (mode 0600, never committed).
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `COMMERCE_ROLE` | `all` (combined), `edge` (HTTP only), `issuer` (signing/projector only) | `all` for local examples |
+| `COMMERCE_ROLE` | `all` (test only), `edge` (HTTP only), `issuer` (signing/projector only) | `all` (refused in production) |
 | `COMMERCE_DB_PATH` | Shared SQLite store path (writable by both roles) | required |
 | `COMMERCE_PORT` / `COMMERCE_LISTEN_IP` | HTTP bind | 8080 / 127.0.0.1 |
 | `COMMERCE_POLL_SECONDS` | Worker loop poll interval | 2 |
@@ -34,11 +36,21 @@ once at startup (mode 0600, never committed).
 | `PANCAKE_WEBHOOK_TEST_KEY_PATH` | Pancake test webhook public key (PEM) | required |
 | `PANCAKE_WEBHOOK_PRODUCTION_KEY_PATH` | Pancake production webhook public key (PEM) | required |
 
-The Offer/policy catalog is compiled into the service
-(`examples/service.rkt` carries a placeholder) — it is code-reviewed
-configuration, per `docs/permit-integration.md`.
+The Offer/policy catalog is compiled into the service.
+`examples/service.rkt` contains a **non-production Taskly fixture catalog**:
+issuer startup fails in production even when `COMMERCE_ROLE=issuer`.
+Replace the demo catalog and the explicit demo-only guard with an audited,
+version-pinned product policy before any real payment/entitlement deployment
+(per `docs/permit-integration.md`). Merely changing the environment variable
+or adding live secrets is not a production launch procedure.
 
 ## systemd
+
+For a split deployment, start from [edge.env.example](edge.env.example) and
+[issuer.env.example](issuer.env.example); each contains only the configuration
+and secret paths needed by that role. Never give the edge OS user read access
+to the issuer secret directory, and do not use combined `commerce.env.example`
+for production.
 
 For a split deployment, use
 [`commerce-edge.service`](commerce-edge.service) and

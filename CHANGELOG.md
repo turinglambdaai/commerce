@@ -12,6 +12,20 @@ All notable changes to Commerce are documented here.
   security policy, PR/agent handoff template, auditable release checklist and
   documentation links/tests; update a stale organization URL.
 
+- Load the issuer's Permit trust store through Permit's strict JSON reader,
+  rather than a generic JSON parse that could discard duplicate security-
+  critical fields. Add rejection and valid-file regression tests. Reject
+  `COMMERCE_ENVIRONMENT=production` with a combined HTTP/signing role before
+  secret file or database access, with role-policy tests. The bundled demo
+  entitlement catalog also refuses all production issuance until a real,
+  reviewed policy replaces the fixture, with explicit negative tests.
+
+- Keep the in-memory issuance worker and the claim-token-bearing issuance
+  result opaque to Racket diagnostic printing; test both display
+  representations so accidental logging cannot serialize private fields.
+  Process-level key isolation remains a separate production security gate
+  (issue #10).
+
 - Keep operator CLI failures machine-readable as JSON (`invalid-arguments`
   or `database-not-found`, exit 1), and refuse to silently create a new
   database from an operator command, with regression tests; update outdated

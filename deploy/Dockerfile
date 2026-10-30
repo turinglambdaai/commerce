@@ -22,7 +22,7 @@ WORKDIR /src
 
 # Permit source is pinned to the same audited SHA as CI.
 ARG PERMIT_COMMIT=ed32d0eec463665e470657e54d222a1b98148a1e
-ADD https://github.com/turinglambdaai/permit/archive/${PERMIT_COMMIT}.tar.gz /tmp/permit-source.tar.gz
+ADD https://github.com/turlamai/permit/archive/${PERMIT_COMMIT}.tar.gz /tmp/permit-source.tar.gz
 RUN mkdir -p /tmp/permit-src \
  && tar -xzf /tmp/permit-source.tar.gz --strip-components=1 -C /tmp/permit-src \
  && raco pkg install --copy --auto --no-docs --name permit /tmp/permit-src \
