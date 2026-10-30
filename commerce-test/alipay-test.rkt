@@ -3,6 +3,10 @@
 (require base64
          commerce
          commerce/alipay
+         commerce/alipay/client
+         commerce/journal
+         commerce/storage
+         commerce/storage/sqlite
          crypto
          crypto/libcrypto
          json
@@ -339,3 +343,91 @@
    (lambda ()
      (verified-alipay-trade-query->payment-event
       duplicate-wire binding public-pem 1793354400))))
+
+
+(test-case "merchant query performs one bound HTTP call and persists exact signed evidence"
+  (define raw (signed-trade-response query-fields))
+  (define calls (box '()))
+  (define client
+    (make-alipay-merchant-client
+     private-pem public-pem
+     #:environment 'sandbox
+     #:transport
+     (lambda (url headers body connect-timeout request-timeout)
+       (set-box! calls
+                 (cons (list url headers body connect-timeout request-timeout)
+                       (unbox calls)))
+       (values 200 raw))))
+  (define file (make-temporary-file "commerce-alipay-~a.sqlite"))
+  (delete-file file)
+  (dynamic-wind
+    void
+    (lambda ()
+      (define storage (open-sqlite-commerce-storage file))
+      (define result
+        (alipay-query-and-journal!
+         storage client binding "2026-10-30 10:10:00" 1793355000))
+      (check-eq? (journal-acceptance-disposition result) 'accepted)
+      (define row (journal-acceptance-record result))
+      (check-equal? (journal-record-payload row) raw)
+      (check-equal? (payment-event-provider (journal-record-event row))
+                    "alipay")
+      (check-equal? (payment-event-amount (journal-record-event row))
+                    (money "CNY" 1990))
+      (check-eq?
+       (journal-acceptance-disposition
+        (alipay-query-and-journal!
+         storage client binding "2026-10-30 10:10:00" 1793355000))
+       'replayed)
+      (check-equal? (length (unbox calls)) 2)
+      (define request (car (unbox calls)))
+      (check-equal? (car request)
+                    "https://openapi.alipaydev.com/gateway.do")
+      (check-equal? (hash-ref (cadr request) 'content-type)
+                    "application/x-www-form-urlencoded; charset=utf-8")
+      (check-equal? (cadddr request) 5)
+      (check-equal? (car (cddddr request)) 10)
+      (define params (alipay-decode-form (caddr request)))
+      (check-equal? (hash-ref params "method") "alipay.trade.query")
+      (check-true (string? (hash-ref params "sign")))
+      (check-false (string-contains? (format "~s" client) private-pem))
+      (storage-close storage))
+    (lambda ()
+      (for ([suffix '("" "-shm" "-wal")])
+        (define path
+          (string->path (string-append (path->string file) suffix)))
+        (when (file-exists? path)
+          (delete-file path))))))
+
+(test-case "merchant query never trusts HTTP status or unauthenticated response"
+  (define (fake-client code response)
+    (make-alipay-merchant-client
+     private-pem public-pem
+     #:transport
+     (lambda (_endpoint _headers _body _connect _request)
+       (values code response))))
+  (check-exn
+   (bad-code? 'alipay-query-unavailable)
+   (lambda ()
+     (alipay-query-payment
+      (fake-client 429 #"retry") binding "2026-10-30 10:11:00" 1793355000)))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (alipay-query-payment
+      (fake-client 400 #"invalid") binding "2026-10-30 10:11:00" 1793355000)))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (alipay-query-payment
+      (fake-client 200 #"{\"alipay_trade_query_response\":{}}")
+      binding "2026-10-30 10:11:00" 1793355000)))
+  (check-exn
+   (bad-code? 'alipay-query-unavailable)
+   (lambda ()
+     (alipay-query-payment
+      (make-alipay-merchant-client
+       private-pem public-pem
+       #:transport
+       (lambda args (error 'network "temporary outage")))
+      binding "2026-10-30 10:11:00" 1793355000))))
