@@ -31,6 +31,7 @@
         (cons "out_trade_no" "order_test_001")
         (cons "app_id" "2026000000000000")
         (cons "notify_id" "notify_test_001")
+        (cons "gmt_payment" "2026-10-30 12:30:00")
         (cons "trade_no" "202610301234567890")
         (cons "trade_status" "TRADE_SUCCESS")
         (cons "sign_type" "RSA2")))
@@ -95,7 +96,8 @@
   (check-equal?
    (alipay-signing-content signed-fields)
    (string-append
-    "app_id=2026000000000000&notify_id=notify_test_001"
+    "app_id=2026000000000000&gmt_payment=2026-10-30 12:30:00"
+    "&notify_id=notify_test_001"
     "&out_trade_no=order_test_001&seller_id=2088000000000000"
     "&total_amount=12.34&trade_no=202610301234567890"
     "&trade_status=TRADE_SUCCESS"))
