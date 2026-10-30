@@ -226,29 +226,28 @@
                    (and (string? return-url)
                         (string-prefix? return-url "https://"))))
     (reject 'alipay-checkout-invalid "invalid Alipay checkout parameters"))
-  (define business
-    (jsexpr->string
-     (hasheq 'out_trade_no (alipay-order-binding-out-trade-no binding)
-             'total_amount (alipay-cny->text
-                            (alipay-order-binding-amount binding))
-             'subject subject
-             'product_code "FAST_INSTANT_TRADE_PAY")))
-  (define fields
-    (hash "app_id" (alipay-order-binding-app-id binding)
-          "method" "alipay.trade.page.pay"
-          "format" "JSON"
-          "charset" "utf-8"
-          "sign_type" "RSA2"
-          "timestamp" timestamp
-          "version" "1.0"
-          "notify_url" notify-url
-          "biz_content" business))
-  (define final
-    (if return-url
-        (hash-set fields "return_url" return-url)
-        fields))
-  (hash-set final "sign"
-            (alipay-sign-parameters final merchant-private-key-pem)))
+  (let* ([business
+          (jsexpr->string
+           (hasheq 'out_trade_no (alipay-order-binding-out-trade-no binding)
+                   'total_amount (alipay-cny->text
+                                  (alipay-order-binding-amount binding))
+                   'subject subject
+                   'product_code "FAST_INSTANT_TRADE_PAY"))]
+         [fields
+          (hash "app_id" (alipay-order-binding-app-id binding)
+                "method" "alipay.trade.page.pay"
+                "format" "JSON"
+                "charset" "utf-8"
+                "sign_type" "RSA2"
+                "timestamp" timestamp
+                "version" "1.0"
+                "notify_url" notify-url
+                "biz_content" business)]
+         [final (if return-url
+                    (hash-set fields "return_url" return-url)
+                    fields)])
+    (hash-set final "sign"
+              (alipay-sign-parameters final merchant-private-key-pem))))
 
 (define (required params name)
   (define value (hash-ref params name #f))
@@ -270,38 +269,38 @@
 (define (verify-alipay-notification raw binding alipay-public-key-pem)
   (unless (alipay-order-binding? binding)
     (reject 'alipay-binding-invalid "missing checkout binding"))
-  (define params (alipay-decode-form raw))
-  (unless (string=? (required params "sign_type") "RSA2")
-    (reject 'alipay-signature-invalid "unsupported Alipay signature algorithm"))
-  (define signed-bytes
-    (string->bytes/utf-8 (alipay-canonical-parameters params)))
-  (define signature (decode-base64 (required params "sign")))
-  (define key
-    (read-key alipay-public-key-pem #"PUBLIC KEY" 'SubjectPublicKeyInfo))
-  (define valid?
-    (with-handlers ([exn:fail? (lambda (_) #f)])
-      (parameterize ([crypto-factories (list libcrypto-factory)])
-        (digest/verify key 'sha256 signed-bytes signature
-                       #:pad 'pkcs1-v1.5))))
-  (unless valid?
-    (reject 'alipay-signature-invalid "invalid Alipay RSA2 signature"))
-  ;; Important: a signed callback alone is NOT enough to issue rights.
-  (unless (and (string=? (required params "app_id")
-                         (alipay-order-binding-app-id binding))
-               (string=? (required params "seller_id")
-                         (alipay-order-binding-seller-id binding))
-               (string=? (required params "out_trade_no")
-                         (alipay-order-binding-out-trade-no binding))
-               (equal? (alipay-parse-cny (required params "total_amount"))
-                       (alipay-order-binding-amount binding)))
-    (reject 'alipay-order-mismatch "Alipay order does not match checkout binding"))
-  (define status (required params "trade_status"))
-  (unless (member status '("TRADE_SUCCESS" "TRADE_FINISHED"))
-    (reject 'alipay-not-paid "Alipay notification is not a completed payment"))
-  (alipay-notification
-   (required params "notify_id")
-   (required params "trade_no")
-   status
-   (alipay-order-binding-out-trade-no binding)
-   (alipay-order-binding-amount binding)
-   (sha256-hex (bytes->immutable-bytes raw))))
+  (let ([params (alipay-decode-form raw)])
+    (unless (string=? (required params "sign_type") "RSA2")
+      (reject 'alipay-signature-invalid "unsupported Alipay signature algorithm"))
+    (let* ([signed-bytes
+            (string->bytes/utf-8 (alipay-canonical-parameters params))]
+           [signature (decode-base64 (required params "sign"))]
+           [key (read-key alipay-public-key-pem #"PUBLIC KEY"
+                          'SubjectPublicKeyInfo)]
+           [valid?
+            (with-handlers ([exn:fail? (lambda (_) #f)])
+              (parameterize ([crypto-factories (list libcrypto-factory)])
+                (digest/verify key 'sha256 signed-bytes signature
+                               #:pad 'pkcs1-v1.5)))])
+      (unless valid?
+        (reject 'alipay-signature-invalid "invalid Alipay RSA2 signature"))
+      ;; A signed callback alone is NOT enough to issue rights.
+      (unless (and (string=? (required params "app_id")
+                             (alipay-order-binding-app-id binding))
+                   (string=? (required params "seller_id")
+                             (alipay-order-binding-seller-id binding))
+                   (string=? (required params "out_trade_no")
+                             (alipay-order-binding-out-trade-no binding))
+                   (equal? (alipay-parse-cny (required params "total_amount"))
+                           (alipay-order-binding-amount binding)))
+        (reject 'alipay-order-mismatch "Alipay order does not match checkout binding"))
+      (let ([status (required params "trade_status")])
+        (unless (member status '("TRADE_SUCCESS" "TRADE_FINISHED"))
+          (reject 'alipay-not-paid "Alipay notification is not a completed payment"))
+        (alipay-notification
+         (required params "notify_id")
+         (required params "trade_no")
+         status
+         (alipay-order-binding-out-trade-no binding)
+         (alipay-order-binding-amount binding)
+         (sha256-hex (bytes->immutable-bytes raw)))))))
