@@ -15,6 +15,26 @@
                   (if (memq role '(all issuer)) #t #f)
                   "Only the issuer/combined process may load the Permit key")))
 
+(test-case "production refuses the combined secret-bearing service"
+  (validate-service-role-environment! 'all 'test)
+  (validate-service-role-environment! 'edge 'production)
+  (validate-service-role-environment! 'issuer 'production)
+  (for ([pair (in-list '((all production)
+                        (edge staging)
+                        (unknown production)))])
+    (check-exn exn:fail?
+               (lambda ()
+                 (validate-service-role-environment!
+                  (car pair) (cadr pair))))))
+
+(test-case "demo offer cannot silently sign production entitlements"
+  (reject-demo-catalog-in-production! 'edge 'production)
+  (reject-demo-catalog-in-production! 'issuer 'test)
+  (for ([role (in-list '(all issuer))])
+    (check-exn exn:fail?
+               (lambda ()
+                 (reject-demo-catalog-in-production! role 'production)))))
+
 (test-case "invalid role names and data fail before opening secrets"
   (for ([v (in-list (list "" "production" "EDGE" "worker" #f 1))])
     (check-exn exn:fail?
