@@ -12,7 +12,13 @@
  verify-alipay-trade-query-response
  alipay-cny->fen
  (struct-out alipay-binding)
- (struct-out alipay-confirmed-order)
+ alipay-confirmed-order?
+ alipay-confirmed-order-app-id
+ alipay-confirmed-order-seller-id
+ alipay-confirmed-order-order-id
+ alipay-confirmed-order-trade-id
+ alipay-confirmed-order-status
+ alipay-confirmed-order-amount
  alipay-notification?
  alipay-notification-fields
  alipay-notification-order-id
@@ -144,8 +150,7 @@
 
 ;; This value must be constructed by the caller ONLY from an authenticated
 ;; active alipay.trade.query result. It must not be built from browser data.
-(struct alipay-confirmed-order (app-id seller-id order-id trade-id status amount)
-  #:transparent)
+(struct alipay-confirmed-order (app-id seller-id order-id trade-id status amount))
 (struct alipay-notification (fields order-id trade-id status amount))
 
 (define (read-public pem)
@@ -381,7 +386,10 @@
                (= total (money-minor-units (alipay-binding-amount binding)))
                (or (not (hash-has-key? decoded 'seller_id))
                    (equal? (required 'seller_id)
-                           (alipay-binding-seller-id binding))))
+                           (alipay-binding-seller-id binding)))
+               (or (not (hash-has-key? decoded 'app_id))
+                   (equal? (required 'app_id)
+                           (alipay-binding-app-id binding))))
     (fail 'alipay-order-mismatch
           "signed Alipay query result differs from merchant checkout"))
   ;; The merchant application identity comes from the *request binding*;
