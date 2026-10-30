@@ -15,6 +15,10 @@ operations. Do not duplicate a rule across several guides.
 
 ## Integration contracts
 
+- [Alipay Vibe Pay basic collection](alipay-vibe-pay.md) — RSA2 web
+  checkout and signed notification validation; active query, admission
+  and live issuance remain explicit NO-GO gates.
+
 - [Provider contract](provider-contract.md) — what every Pancake, ZPAY, or
   store adapter must prove before emitting a canonical event.
 - [Permit integration](permit-integration.md) — how rights intents become
