@@ -6,8 +6,6 @@
 (require crypto
          crypto/libcrypto
          crypto/pem
-         racket/random
-         file/sha1
          racket/cmdline
          racket/date
          racket/file

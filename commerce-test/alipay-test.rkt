@@ -13,6 +13,7 @@
          commerce/alipay
          rackunit
          racket/file
+         racket/list
          racket/string)
 
 ;; Generate fixture key material during the test, never commit a private key
