@@ -6,6 +6,7 @@
 ;; merchant order before supplying matching verified order facts.
 (provide
  alipay-signing-content
+ parse-alipay-form
  alipay-cny->fen
  (struct-out alipay-binding)
  (struct-out alipay-confirmed-order)
@@ -52,6 +53,54 @@
   (unless (= (length names) (length (remove-duplicates names)))
     (fail 'alipay-duplicate-field "duplicate Alipay notification field"))
   fields)
+
+;; Preserve form member multiplicity and exact decoded values. A hash-based
+;; web framework parser loses duplicate parameters before signature checking.
+;; Both byte count and field count are bounded before doing cryptography.
+(define (parse-alipay-form raw)
+  (unless (bytes? raw)
+    (raise-argument-error 'parse-alipay-form "bytes?" raw))
+  (when (> (bytes-length raw) 65536)
+    (fail 'alipay-form-invalid "Alipay form exceeds size limit"))
+  (define (hex-digit b)
+    (cond [(<= 48 b 57) (- b 48)]
+          [(<= 65 b 70) (- b 55)]
+          [(<= 97 b 102) (- b 87)]
+          [else #f]))
+  (define (decode part)
+    (define output (open-output-bytes))
+    (let loop ([i 0])
+      (when (< i (bytes-length part))
+        (define b (bytes-ref part i))
+        (cond
+          [(= b 37)
+           (unless (< (+ i 2) (bytes-length part))
+             (fail 'alipay-form-invalid "truncated form escape"))
+           (define hi (hex-digit (bytes-ref part (add1 i))))
+           (define lo (hex-digit (bytes-ref part (+ i 2))))
+           (unless (and hi lo)
+             (fail 'alipay-form-invalid "malformed form escape"))
+           (write-byte (+ (* hi 16) lo) output)
+           (loop (+ i 3))]
+          [else
+           (write-byte (if (= b 43) 32 b) output)
+           (loop (add1 i))])))
+    (with-handlers ([exn:fail?
+                     (lambda (_) (fail 'alipay-form-invalid
+                                       "form field not valid UTF-8"))])
+      (bytes->string/utf-8 (get-output-bytes output))))
+  (when (= (bytes-length raw) 0)
+    (fail 'alipay-form-invalid "empty form"))
+  (define items (regexp-split #rx#"&" raw))
+  (when (> (length items) 128)
+    (fail 'alipay-form-invalid "too many form fields"))
+  (define fields
+    (for/list ([item (in-list items)])
+      (define matches (regexp-match #rx#"^([^=]+)=(.*)$" item))
+      (unless matches
+        (fail 'alipay-form-invalid "malformed form field"))
+      (cons (decode (cadr matches)) (decode (caddr matches)))))
+  (checked-fields 'parse-alipay-form fields))
 
 (define (alipay-signing-content fields)
   (checked-fields 'alipay-signing-content fields)
