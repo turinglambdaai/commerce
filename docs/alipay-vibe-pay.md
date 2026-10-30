@@ -14,32 +14,37 @@
 confirmation **boundary**. It has no network side effects and never reads a
 merchant private key.
 
-1. Parse bounded HTTP form bytes with `parse-alipay-form` into a
+1. Build server-priced signed `alipay.trade.page.pay` gateway fields with
+   `make-alipay-page-pay-parameters`: exact fen-based `total_amount`,
+   immutable `out_trade_no`, HTTPS callback addresses, RSA2 signing using
+   an operator-held merchant private key. **This only returns signed fields;
+   it does not submit a gateway request or create a remote order.**
+2. Parse bounded HTTP form bytes with `parse-alipay-form` into a
    **duplicate-preserving decoded field association list**. Reject
    duplicate field names, missing signature, non-RSA2 mode and invalid RSA2
    signature. Build the ordered `key=value&...` signing representation
    excluding `sign` and `sign_type`. Verify using the pinned Alipay public
    key; do not use the merchant public key to verify callbacks.
-2. Convert CNY decimal to exact fen, rejecting float, exponent, ambiguous
+3. Convert CNY decimal to exact fen, rejecting float, exponent, ambiguous
    precision and noncanonical inputs. Do not round silently.
-3. Require a durable server-owned checkout binding (app id, seller,
+4. Require a durable server-owned checkout binding (app id, seller,
    `out_trade_no`, Offer, opaque subject and amount) and a **separately
    authenticated active query** record. The caller must query
    `alipay.trade.query`, verify its response signature/certificate and bind
    merchant, transaction, amount, status and environment before constructing
    the active-query record. The record is not valid merely because its type
    can be constructed.
-4. Only `TRADE_SUCCESS` matching all three sources can create a canonical
+5. Only `TRADE_SUCCESS` matching all three sources can create a canonical
    `payment-succeeded` fact for the existing Commerce journal/outbox path.
    All other states reject. Never award rights on the browser `return_url`.
-5. Every signed fixture uses synthetic IDs and a temporary RSA private key
+6. Every signed fixture uses synthetic IDs and a temporary RSA private key
    **not committed** to Git.
 
 ## Not yet implemented (must remain disabled for live use)
 
-- Hosting and signed generation of `alipay.trade.page.pay` payment requests;
-  generated orders must use collision-safe `out_trade_no` and server-priced
-  immutable Offer IDs.
+- Production checkout HTTP submission / redirect, authenticated endpoint
+  environment and durable collision-safe generation of `out_trade_no`.
+  The pure signed-parameter builder alone is not a complete checkout.
 - Production integration of the form parser into a verified HTTP ingress
   with request/content-type limits, certificate-mode and key rotation.
 - Active `alipay.trade.query` signed API client/response verifier,
