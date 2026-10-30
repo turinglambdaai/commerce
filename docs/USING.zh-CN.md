@@ -30,6 +30,9 @@
 
 在 [Issues](https://github.com/turlamai/commerce/issues) 反馈，中文或英文均可。包含包版本/提交、Racket 版本、系统架构、最小复现和已脱敏的首条错误。不要附带真实密钥、客户凭据、支付原始数据或私密文档。社区支持不承诺响应时限。
 
-[安全边界](security.md)包含服务秘密与数据处理要求；公开 issue 只提交无敏感信息的复现。
+[安全边界](security.md)包含服务秘密与数据处理要求；
+疑似漏洞按[私密报告流程](../SECURITY.md)反馈，
+[发布证据清单](release-checklist.md)区分夹具验证与生产准入。
+公开 Issue 只提交无敏感信息的复现。
 
 [现行许可证](../LICENSE) · [CHANGELOG](../CHANGELOG.md)

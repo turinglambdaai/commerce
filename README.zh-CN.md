@@ -207,10 +207,12 @@ Racket 服务端签名下单、主动查单验签、严格异步通知及 SQLite
 - 生产部署和运行 canary。这里不声明支付渠道认证或生产就绪。
 
 上述 HTTP 边界、领取门户、运营重放/审计、订阅投影已是实现面，不再列为 TODO；
-本地/fixture 覆盖与真实渠道集成证据分别记录。下一条受控集成为 gptp-studio 的
-一次性购买 offer 与签名更新窗，沿用 [issue #1](https://github.com/turlamai/commerce/issues/1)
-及 [PR #2](https://github.com/turlamai/commerce/pull/2)，不重复启动活动中的切片。
-顺序与发布门禁以 [ROADMAP.md](ROADMAP.md) 为准。
+本地/fixture 覆盖与真实渠道集成证据分别记录。gptp-studio 的
+「根据支付时间计算维护更新窗」已由[合并的 PR #2](https://github.com/turlamai/commerce/pull/2)
+实现并关闭 [issue #1](https://github.com/turlamai/commerce/issues/1)，但这仍是
+夹具验证，不是真实渠道订单。下一步必须验证商户准入、可信签发和真实购买与领取，
+以 [ROADMAP.md](ROADMAP.md) 和[发布证据清单](docs/release-checklist.md)
+作为放行依据。
 
 ## 部署
 
@@ -221,6 +223,13 @@ Racket 服务端签名下单、主动查单验签、严格异步通知及 SQLite
 [ADR-0020](docs/decisions/0020-split-service-roles.md)。**进程拆分不等于签发授权
 已完全隔离，更不代表具备真实付款上线证据。**`/readyz` 提供就绪状态，
 崩溃后仍依赖持久化重试收敛。
+
+## 安全问题与发布状态
+
+安全漏洞请遵循 [SECURITY.md](SECURITY.md) 的**私密报告流程**，
+不要在公开 Issue 中粘贴可利用的细节或密钥。
+[发布证据清单](docs/release-checklist.md) 明确列出未满足的商户准入、
+签发信任及真实购买门禁；模拟购买成功不能代表生产就绪。
 
 ## 开发
 

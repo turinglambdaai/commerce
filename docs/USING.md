@@ -30,6 +30,9 @@ Record the package versions and platforms your application actually tests. Read 
 
 Use [Issues](https://github.com/turlamai/commerce/issues) in English or Chinese. Include package/commit, Racket version, OS/architecture, a minimal reproduction and the first redacted error. Never attach real keys, customer credentials, raw payment data or private documents. Community support has no guaranteed response time.
 
-[Security boundaries](security.md) cover service secrets and data handling; public issues must use non-sensitive reproductions.
+[Security boundaries](security.md) cover service secrets and data handling;
+[private vulnerability reporting](../SECURITY.md) is for suspected exploits and
+[release evidence](release-checklist.md) separates fixture validation from
+production approval. Public issues must use non-sensitive reproductions.
 
 [Current licence](../LICENSE) · [CHANGELOG](../CHANGELOG.md)

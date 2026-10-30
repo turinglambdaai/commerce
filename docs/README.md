@@ -27,6 +27,10 @@ operations. Do not duplicate a rule across several guides.
 
 - [Security](security.md) — trust domains, webhook authentication, keys,
   personal data, and failure behavior.
+- [Private vulnerability reporting](../SECURITY.md) — confidential disclosure
+  and supported development security scope.
+- [Release evidence checklist](release-checklist.md) — explicit CI, signer,
+  merchant-admission, live canary, restore and rollback go/no-go gates.
 - [Operations](operations.md) — replay, stuck work, refunds, reconciliation,
   backup/restore, and observability requirements.
 - [Runbook](runbook.md) — the operator's question-by-question answers with

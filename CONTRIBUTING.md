@@ -31,6 +31,14 @@ Never treat source matching or a mocked happy path as production evidence.
 
 ## Pull requests
 
+Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md) to record the exact
+candidate SHA, focused and full checks actually executed, compatibility,
+failure-injection evidence, and any unverified release conditions. Agents must
+leave a reproducible handoff rather than a conversational status report.
+Do not mark queued macOS jobs as passing or merge by suppressing CI failures.
+Use [release evidence](docs/release-checklist.md) for any go-live claim and
+[SECURITY.md](SECURITY.md) for confidential reports.
+
 Explain the invariant, failure mode, compatibility effect, and concrete
 evidence. Update the canonical document and both English and Chinese entry
 documentation when the user path changes. Do not mix a provider adapter,
@@ -43,4 +51,4 @@ and contain no real personal data.
 
 ## Documentation languages
 
-Use English for default public docs and preserve complete Chinese README and onboarding paths. Keep examples, supported-platform limits, troubleshooting and privacy/security promises consistent in the same change. Preserve identifiers and copyable commands; technical protocols have one normative English source, not separate language implementations. See the [family documentation language policy](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md) for scope and review checks.
+Use English for default public docs and preserve complete Chinese README and onboarding paths. Keep examples, supported-platform limits, troubleshooting and privacy/security promises consistent in the same change. Preserve identifiers and copyable commands; technical protocols have one normative English source, not separate language implementations. See the [family documentation language policy](https://github.com/turlamai/turlamai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md) for scope and review checks.

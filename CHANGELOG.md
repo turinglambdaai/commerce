@@ -6,6 +6,12 @@ All notable changes to Commerce are documented here.
 
 ### Fixed
 
+- Correct outdated first-product roadmap and bilingual README claims: issue #1
+  and PR #2 are closed/merged, while merchant approval, production signer
+  authorization and live evidence remain open gates. Add a root confidential
+  security policy, PR/agent handoff template, auditable release checklist and
+  documentation links/tests; update a stale organization URL.
+
 - Load the issuer's Permit trust store through Permit's strict JSON reader,
   rather than a generic JSON parse that could discard duplicate security-
   critical fields. Add rejection and valid-file regression tests. Reject
