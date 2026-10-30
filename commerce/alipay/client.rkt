@@ -66,8 +66,8 @@
                (positive? (string-length private-key-pem))
                (string? public-key-pem)
                (positive? (string-length public-key-pem))
-               (positive-real? connect-timeout)
-               (positive-real? request-timeout)
+               (and (real? connect-timeout) (> connect-timeout 0))
+               (and (real? request-timeout) (> request-timeout 0))
                (procedure? transport))
     (reject 'alipay-merchant-config-invalid "invalid Alipay merchant configuration"))
   (alipay-merchant-client environment private-key-pem public-key-pem
