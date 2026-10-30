@@ -97,40 +97,40 @@
                (exact-nonnegative-integer? observed-at)
                (or (not notice) (alipay-notification? notice)))
     (reject 'alipay-query-invalid "invalid Alipay active query context"))
-  (define fields
-    (make-alipay-trade-query-parameters
-     binding
-     (alipay-merchant-client-private-key client)
-     timestamp))
-  (define endpoint
-    (if (eq? (alipay-merchant-client-environment client) 'production)
-        alipay-gateway-url
-        sandbox-gateway))
-  (define-values (status raw)
-    (with-handlers ([exn:fail:commerce? raise]
-                    [exn:fail?
-                     (lambda (_)
-                       (reject 'alipay-query-unavailable
-                               "Alipay query transport is unavailable"))])
-      ((alipay-merchant-client-transport client)
-       endpoint
-       (hash 'content-type "application/x-www-form-urlencoded; charset=utf-8")
-       (form-encode fields)
-       (alipay-merchant-client-connect-timeout client)
-       (alipay-merchant-client-request-timeout client))))
-  (unless (and (exact-integer? status) (bytes? raw)
-               (<= (bytes-length raw) max-query-response-bytes))
-    (reject 'alipay-query-invalid "malformed Alipay query HTTP response"))
-  (cond
-    [(or (= status 408) (= status 429) (<= 500 status 599))
-     (reject 'alipay-query-unavailable "Alipay active query retryable failure")]
-    [(not (= status 200))
-     (reject 'alipay-query-invalid "Alipay active query rejected")])
-  (let ([event
-         (verified-alipay-trade-query->payment-event
-          raw binding (alipay-merchant-client-public-key client)
-          observed-at #:notification notice)])
-    (values (bytes->immutable-bytes raw) event)))
+  (let* ([fields
+          (make-alipay-trade-query-parameters
+           binding (alipay-merchant-client-private-key client) timestamp)]
+         [endpoint
+          (if (eq? (alipay-merchant-client-environment client) 'production)
+              alipay-gateway-url
+              sandbox-gateway)])
+    (let-values
+        ([(status raw)
+          (with-handlers ([exn:fail:commerce? raise]
+                          [exn:fail?
+                           (lambda (_)
+                             (reject 'alipay-query-unavailable
+                                     "Alipay query transport is unavailable"))])
+            ((alipay-merchant-client-transport client)
+             endpoint
+             (hash 'content-type
+                   "application/x-www-form-urlencoded; charset=utf-8")
+             (form-encode fields)
+             (alipay-merchant-client-connect-timeout client)
+             (alipay-merchant-client-request-timeout client)))])
+      (unless (and (exact-integer? status) (bytes? raw)
+                   (<= (bytes-length raw) max-query-response-bytes))
+        (reject 'alipay-query-invalid "malformed Alipay query HTTP response"))
+      (cond
+        [(or (= status 408) (= status 429) (<= 500 status 599))
+         (reject 'alipay-query-unavailable "Alipay active query retryable failure")]
+        [(not (= status 200))
+         (reject 'alipay-query-invalid "Alipay active query rejected")])
+      (let ([event
+             (verified-alipay-trade-query->payment-event
+              raw binding (alipay-merchant-client-public-key client)
+              observed-at #:notification notice)])
+        (values (bytes->immutable-bytes raw) event)))))
 
 (define (alipay-query-and-journal! storage client binding timestamp observed-at
                                    #:notification [notice #f])
