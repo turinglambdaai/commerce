@@ -10,9 +10,11 @@
 
 ## Implemented bounded slice
 
-`commerce/alipay.rkt` is a Racket server-only RSA2 notification and payment
-confirmation **boundary**. It has no network side effects and never reads a
-merchant private key.
+The Racket implementation now has separate modules for signed protocol
+primitives (`commerce/alipay`), a bounded HTTPS order-query client
+(`commerce/alipay/client`), and a journal-backed HTTP callback edge
+(`commerce/alipay/server`). The edge does not carry Permit signer keys.
+All modules remain **unapproved for real merchant use until CI and admission**.
 
 1. Build server-priced signed `alipay.trade.page.pay` gateway fields with
    `make-alipay-page-pay-parameters`: exact fen-based `total_amount`,
@@ -27,31 +29,35 @@ merchant private key.
    key; do not use the merchant public key to verify callbacks.
 3. Convert CNY decimal to exact fen, rejecting float, exponent, ambiguous
    precision and noncanonical inputs. Do not round silently.
-4. Require a durable server-owned checkout binding (app id, seller,
-   `out_trade_no`, Offer, opaque subject and amount) and a **separately
-   authenticated active query** record. The caller must query
-   `alipay.trade.query`, verify its response signature/certificate and bind
-   merchant, transaction, amount, status and environment before constructing
-   the active-query record. The record is not valid merely because its type
-   can be constructed.
+4. A signed `alipay.trade.query` request is sent through the bounded,
+   fixed-host HTTPS client. Its response signature is checked against the
+   exact raw JSON response-node bytes, not a reserialized hash; the
+   authenticated order facts have no publicly exported constructor.
+   The response must match the durable checkout binding for merchant,
+   transaction, currency and amount.
 5. Only `TRADE_SUCCESS` matching all three sources can create a canonical
-   `payment-succeeded` fact for the existing Commerce journal/outbox path.
+   `payment-succeeded` fact. The HTTP edge reads the immutable SQLite
+   binding, verifies callback and query, writes the raw event to the existing
+   Commerce journal and replies with exact plain-text `success` only after
+   that transaction commits. A signed GMT+8 payment timestamp keeps replays
+   deterministic.
    All other states reject. Never award rights on the browser `return_url`.
 6. Every signed fixture uses synthetic IDs and a temporary RSA private key
    **not committed** to Git.
 
 ## Not yet implemented (must remain disabled for live use)
 
-- Production checkout HTTP submission / redirect, authenticated endpoint
-  environment and durable collision-safe generation of `out_trade_no`.
-  The pure signed-parameter builder alone is not a complete checkout.
-- Production integration of the form parser into a verified HTTP ingress
-  with request/content-type limits, certificate-mode and key rotation.
-- Active `alipay.trade.query` signed API client/response verifier,
-  retry/reconciliation and durable checkout bindings.
-- Asynchronous HTTP notification endpoint, raw payload digest, idempotent
-  acknowledgement **after journal commit**, and production edge/issuer
-  deployment wiring.
+- A public, authenticated product checkout API: the current trusted
+  `examples/alipay-checkout.rkt` generates a random `out_trade_no`,
+  durably binds it before signing a browser-submittable HTML form, but
+  deliberately accepts prices only from the **operator**, not the public.
+  Production callers need reviewed server-side Offer pricing and identity.
+- Certificate-mode and key-rotation support: currently **RSA2 public-key
+  mode only** with explicit sandbox and production isolation.
+- Automated missed-webhook reconciliation, timed worker retry schedules,
+  deployed reverse-proxy protection and real environment traffic proof.
+  `examples/alipay-service.rkt` provides the loopback-only HTTP process;
+  it is not a production deployment playbook by itself.
 - `alipay.trade.refund`, refund status querying, partial-refund semantics,
   cumulative refund accounting and the full paid/refunded state model.
 - Full end-to-end integration, operator runbook and accepted merchant
@@ -91,3 +97,35 @@ Alipay merchant authorization. Issues [#5](https://github.com/turlamai/commerce/
 [#10](https://github.com/turlamai/commerce/issues/10) and
 [#4](https://github.com/turlamai/commerce/issues/4) remain independent
 production release gates.
+
+## Local checkout and callback drill (no real account needed for code tests)
+
+The service uses only your **Alipay merchant gateway signing key**, never
+the Permit issuer signing key. Use the separately configured, approved
+`ALIPAY_ENV`, `ALIPAY_APP_ID`, `ALIPAY_SELLER_ID`,
+`ALIPAY_PRIVATE_KEY_PATH`, `ALIPAY_PUBLIC_KEY_PATH`,
+`COMMERCE_DATABASE_PATH`, `COMMERCE_HTTP_PORT`,
+`ALIPAY_NOTIFY_URL` and `ALIPAY_RETURN_URL`.
+Use [the placeholder-only template](../deploy/alipay.env.example), never
+commit populated secret files.
+
+The operator example (not a public price API) binds a **new random**
+merchant order to product, Offer, opaque subject and exact CNY fen before
+printing a signed, submit-by-button HTML checkout form:
+
+```sh
+racket examples/alipay-checkout.rkt taskly taskly-pro-lifetime subject-001 2900 'Taskly Pro' > checkout.html
+racket examples/alipay-service.rkt
+```
+
+Serve the callback only through an externally trusted TLS reverse proxy at
+`/webhooks/alipay`. Sandbox and production use distinct Alipay merchant
+credentials. A browser return is display-only and cannot grant Permit rights.
+Pending issued rights still flow via existing journal projector and separate
+Permit issuer worker.
+
+This is **not evidence that Alipay approved our product or that a live payment
+worked**. Before connecting real accounts, approve the merchant account and
+product category, confirm fees and refund rules, prove the whole CI matrix,
+then run a documented sandbox payment, refund and replay drill with sensitive
+fields redacted.
