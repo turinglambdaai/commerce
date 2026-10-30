@@ -203,3 +203,140 @@
              (lambda () (make-alipay-page-pay-parameters
                          binding private-pem "Taskly Pro" "2026-10-30 09:00:00"
                          "http://example.test/notify"))))
+
+
+;; The gateway signs the EXACT raw JSON value of alipay_trade_query_response.
+;; No merchant credentials or genuine buyer data are used in these tests.
+(define query-fields
+  (hash 'code "10000"
+        'msg "Success"
+        'out_trade_no "order_001"
+        'trade_no "alipay_trade_001"
+        'trade_status "TRADE_SUCCESS"
+        'total_amount "19.90"))
+
+(define (signed-trade-response fields)
+  (define body (jsexpr->string fields))
+  (define bytes (string->bytes/utf-8 body))
+  (define signature
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (digest/sign test-private 'sha256 bytes #:pad 'pkcs1-v1.5)))
+  (string->bytes/utf-8
+   (string-append
+    "{\"alipay_trade_query_response\":"
+    body
+    ",\"sign\":\""
+    (bytes->string/utf-8 (base64-encode signature #:line #f))
+    "\"}")))
+
+(test-case "active query request signs the Alipay request form including sign_type"
+  (define params
+    (make-alipay-trade-query-parameters
+     binding private-pem "2026-10-30 10:01:02"))
+  (check-equal? (hash-ref params "method") "alipay.trade.query")
+  (check-equal? (hash-ref params "sign_type") "RSA2")
+  (check-equal? (hash-ref (string->jsexpr (hash-ref params "biz_content"))
+                          'out_trade_no) "order_001")
+  (check-true
+   (parameterize ([crypto-factories (list libcrypto-factory)])
+     (digest/verify
+      test-public 'sha256
+      (string->bytes/utf-8
+       (alipay-canonical-parameters params #:notification? #f))
+      (base64-decode (string->bytes/utf-8 (hash-ref params "sign")))
+      #:pad 'pkcs1-v1.5))))
+
+(test-case "signed active query confirms notice and yields verified Commerce fact"
+  (define notice
+    (verify-alipay-notification
+     (signed-form notification-fields) binding public-pem))
+  (define raw (signed-trade-response query-fields))
+  (define event
+    (verified-alipay-trade-query->payment-event
+     raw binding public-pem 1793354400 #:notification notice))
+  (check-true (payment-event? event))
+  (check-equal? (payment-event-provider event) "alipay")
+  (check-equal? (payment-event-order-id event) "order_001")
+  (check-equal? (payment-event-offer-id event) "taskly-pro-lifetime")
+  (check-equal? (payment-event-subject-id event) "subject-test-001")
+  (check-equal? (payment-event-amount event) (money "CNY" 1990))
+  (check-equal? (payment-event-occurred-at event) 1793354400)
+  (check-equal? (string-length (payment-event-payload-digest event)) 64)
+  ;; Reconciliation works even when the asynchronous notification is lost.
+  (define recovery
+    (verified-alipay-trade-query->payment-event raw binding public-pem 1793354400))
+  (check-equal? (payment-event-event-id recovery)
+                (payment-event-event-id event)))
+
+(test-case "signed query mismatches, refund and unpaid statuses fail closed"
+  (for ([fields (list (hash-set query-fields 'out_trade_no "wrong_order")
+                     (hash-set query-fields 'total_amount "19.91")
+                     (hash-set query-fields 'app_id "different-app")
+                     (hash-set query-fields 'seller_id "different-seller"))])
+    (check-exn
+     (bad-code? 'alipay-order-mismatch)
+     (lambda ()
+       (verified-alipay-trade-query->payment-event
+        (signed-trade-response fields) binding public-pem 1793354400))))
+  (for ([status '("WAIT_BUYER_PAY" "TRADE_CLOSED")])
+    (check-exn
+     (bad-code? 'alipay-not-paid)
+     (lambda ()
+       (verified-alipay-trade-query->payment-event
+        (signed-trade-response (hash-set query-fields 'trade_status status))
+        binding public-pem 1793354400))))
+  (check-exn
+   (bad-code? 'alipay-refund-unsupported)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      (signed-trade-response (hash-set query-fields 'refund_fee "2.00"))
+      binding public-pem 1793354400)))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      (signed-trade-response (hash-set query-fields 'code "40004"))
+      binding public-pem 1793354400))))
+
+(test-case "query response signature, exact JSON and duplicated security keys"
+  (define signed (signed-trade-response query-fields))
+  (define corrupted
+    (bytes-append (subbytes signed 0 (- (bytes-length signed) 1))
+                  #" "))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      corrupted binding public-pem 1793354400)))
+  (define other-amount
+    (bytes->string/utf-8 signed))
+  (define tampered
+    (string->bytes/utf-8
+     (string-replace other-amount "19.90" "19.91")))
+  (check-exn
+   (bad-code? 'alipay-signature-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      tampered binding public-pem 1793354400)))
+  (define duplicate-signed-body
+    (string-replace (jsexpr->string query-fields)
+                    "\"code\":\"10000\""
+                    "\"code\":\"10000\",\"code\":\"10000\""))
+  (define duplicate-sig
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (digest/sign test-private 'sha256
+                   (string->bytes/utf-8 duplicate-signed-body)
+                   #:pad 'pkcs1-v1.5)))
+  (define duplicate-wire
+    (string->bytes/utf-8
+     (string-append
+      "{\"alipay_trade_query_response\":"
+      duplicate-signed-body
+      ",\"sign\":\""
+      (bytes->string/utf-8 (base64-encode duplicate-sig #:line #f))
+      "\"}")))
+  (check-exn
+   (bad-code? 'alipay-query-invalid)
+   (lambda ()
+     (verified-alipay-trade-query->payment-event
+      duplicate-wire binding public-pem 1793354400))))
