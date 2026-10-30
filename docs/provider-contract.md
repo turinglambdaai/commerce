@@ -99,8 +99,10 @@ Alipay Vibe Pay **basic collection** is under incremental development as an
 optional, one-time CNY web/desktop-browser path. `commerce/alipay` constructs
 RSA2 page-pay requests, validates signed callbacks and signed trade-query
 responses; `commerce/alipay/client` provides a bounded HTTPS query with
-transactional journal acceptance. A callback or browser redirect alone must
-never issue rights. This path is **not merchant-admitted**, and refund,
+transactional journal acceptance; `commerce/alipay/server` supplies a
+separate `notify_url` listener that replies `success` only after durable
+journal acceptance. A callback or browser redirect alone must never issue
+rights. This path is **not merchant-admitted**, and refund,
 provider HTTP ingress, settlement and live canary evidence remain incomplete.
 See [Alipay integration handoff](alipay-vibe-pay.md) and ADR-0019.
 
