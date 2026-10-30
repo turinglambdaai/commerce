@@ -153,7 +153,7 @@
           (reject 'alipay-form-invalid "duplicate Alipay form field"))
         (hash-set params name value)))))
 
-(define (alipay-canonical-parameters params)
+(define (alipay-canonical-parameters params #:notification? [notification? #t])
   (unless (and (hash? params)
                (for/and ([(k v) (in-hash params)])
                  (and (string? k) (string? v))))
@@ -162,7 +162,8 @@
   ;; sign/sign_type. Never re-encode, case-fold or normalize decoded values.
   (string-join
    (for/list ([name (in-list (sort (hash-keys params) string<?))]
-              #:unless (or (member name '("sign" "sign_type"))
+              #:unless (or (string=? name "sign")
+                           (and notification? (string=? name "sign_type"))
                            (string=? (hash-ref params name) "")))
      (string-append name "=" (hash-ref params name)))
    "&"))
@@ -206,7 +207,7 @@
       (encode-base64
        (digest/sign key 'sha256
                     (string->bytes/utf-8
-                     (alipay-canonical-parameters params))
+                     (alipay-canonical-parameters params #:notification? #f))
                     #:pad 'pkcs1-v1.5)))))
 
 (define (make-alipay-page-pay-parameters binding merchant-private-key-pem
@@ -294,6 +295,19 @@
                    (equal? (alipay-parse-cny (required params "total_amount"))
                            (alipay-order-binding-amount binding)))
         (reject 'alipay-order-mismatch "Alipay order does not match checkout binding"))
+      (unless (string=? (required params "notify_type") "trade_status_sync")
+        (reject 'alipay-notification-invalid "unsupported Alipay notification type"))
+      (when (and (hash-has-key? params "auth_app_id")
+                 (not (string=? (required params "auth_app_id")
+                                (alipay-order-binding-app-id binding))))
+        (reject 'alipay-order-mismatch "Alipay authorized app mismatch"))
+      ;; Refund and fund-distribution callbacks are not purchase events.
+      ;; Never classify a TRADE_SUCCESS with refund metadata as a fresh sale.
+      (when (or (hash-has-key? params "refund_fee")
+                (hash-has-key? params "gmt_refund")
+                (hash-has-key? params "out_biz_no"))
+        (reject 'alipay-refund-unsupported
+                "refund notification requires separate refund verification"))
       (let ([status (required params "trade_status")])
         (unless (member status '("TRADE_SUCCESS" "TRADE_FINISHED"))
           (reject 'alipay-not-paid "Alipay notification is not a completed payment"))
