@@ -87,10 +87,10 @@
                #"success"
                #"fail")))))))
 
-(define (local-trade-timestamp)
-  ;; The deployment must configure the merchant account's expected timezone.
-  ;; Do not use RFC3339 or English date spelling for Alipay's API timestamp.
-  (define d (seconds->date (current-seconds)))
+(define (local-trade-timestamp [epoch (current-seconds)])
+  ;; Alipay requires wall-clock GMT+8, independent of the host TZ / DST.
+  ;; Shift the UTC epoch and render as UTC to avoid double timezone offsets.
+  (define d (seconds->date (+ epoch (* 8 60 60)) #f))
   (define (two n)
     (if (< n 10) (string-append "0" (number->string n))
         (number->string n)))
@@ -127,3 +127,9 @@
      #:servlet-path "/webhooks/alipay"
      #:servlet-regexp #rx"^/webhooks/alipay$"))
   (lambda () (custodian-shutdown-all custodian)))
+
+(module+ test
+  (require rackunit)
+  (test-case "Alipay request timestamp uses GMT+8 on any host"
+    (check-equal? (local-trade-timestamp 0) "1970-01-01 08:00:00")
+    (check-equal? (local-trade-timestamp 57900) "1970-01-02 00:05:00")))

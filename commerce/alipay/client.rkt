@@ -16,7 +16,7 @@
          "../journal.rkt"
          "../private/model.rkt")
 
-(define sandbox-gateway "https://openapi.alipaydev.com/gateway.do")
+(define sandbox-gateway "https://openapi-sandbox.dl.alipaydev.com/gateway.do")
 (define max-query-response-bytes 65536)
 (define hex-chars "0123456789ABCDEF")
 

@@ -42,6 +42,13 @@ or implies eligibility for personal software/AI services.
 
 ## Signed active query, HTTPS client, and journal integration
 
+The domestic web-checkout sandbox gateway is
+`https://openapi-sandbox.dl.alipaydev.com/gateway.do`; production is
+`https://openapi.alipay.com/gateway.do`. Verify the final gateway,
+sandbox app id, and public-key mode against your merchant console.
+API request timestamps use GMT+8 regardless of the host timezone or DST.
+
+
 - `make-alipay-trade-query-parameters` signs a bound
   `alipay.trade.query` request with RSA2 and the **request-specific**
   `sign_type` parameter.

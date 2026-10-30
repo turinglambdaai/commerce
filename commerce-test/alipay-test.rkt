@@ -385,7 +385,7 @@
       (let* ([request (car (unbox calls))]
              [params (alipay-decode-form (caddr request))])
         (check-equal? (car request)
-                      "https://openapi.alipaydev.com/gateway.do")
+                      "https://openapi-sandbox.dl.alipaydev.com/gateway.do")
         (check-equal? (hash-ref (cadr request) 'content-type)
                       "application/x-www-form-urlencoded; charset=utf-8")
         (check-equal? (cadddr request) 5)
