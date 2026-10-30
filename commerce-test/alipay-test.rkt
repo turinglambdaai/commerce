@@ -4,6 +4,7 @@
          commerce
          commerce/alipay
          commerce/alipay/client
+         commerce/alipay/server
          commerce/journal
          commerce/storage
          commerce/storage/sqlite
@@ -431,3 +432,108 @@
        #:transport
        (lambda args (error 'network "temporary outage")))
       binding "2026-10-30 10:11:00" 1793355000))))
+
+
+(test-case "notify_url acknowledges only after active signed query and durable journal"
+  (define response (signed-trade-response query-fields))
+  (define callback (signed-form notification-fields))
+  (define calls (box 0))
+  (define client
+    (make-alipay-merchant-client
+     private-pem public-pem
+     #:transport
+     (lambda (_url _headers _body _connect _request)
+       (set-box! calls (add1 (unbox calls)))
+       (values 200 response))))
+  (define file (make-temporary-file "commerce-alipay-webhook-~a.sqlite"))
+  (delete-file file)
+  (dynamic-wind
+    void
+    (lambda ()
+      (define storage (open-sqlite-commerce-storage file))
+      (define endpoint
+        (make-alipay-webhook-endpoint client "test-app-01" "test-seller-01"
+                                     storage))
+      (define record
+        (checkout-binding "order_001" "alipay" "taskly"
+                          "taskly-pro-lifetime" "subject-test-001"
+                          "CNY" 1990 2))
+      (storage-create-checkout-binding! storage record
+                                        #:created-at 1793355000)
+      (let-values ([(status ack)
+                    (handle-alipay-webhook-post
+                     endpoint callback
+                     #:timestamp "2026-10-30 10:10:00"
+                     #:observed-at 1793355000)])
+        (check-equal? status 200)
+        (check-equal? ack #"success"))
+      (let-values ([(status ack)
+                    (handle-alipay-webhook-post
+                     endpoint callback
+                     #:timestamp "2026-10-30 10:10:00"
+                     #:observed-at 1793355000)])
+        (check-equal? status 200)
+        (check-equal? ack #"success"))
+      (check-equal? (unbox calls) 2)
+      (let ([bad (bytes-append callback #"&out_trade_no=other")])
+        (let-values ([(status ack)
+                      (handle-alipay-webhook-post
+                       endpoint bad
+                       #:timestamp "2026-10-30 10:10:00"
+                       #:observed-at 1793355000)])
+          (check-equal? status 200)
+          (check-equal? ack #"fail")))
+      (check-equal? (unbox calls) 2)
+      (storage-close storage))
+    (lambda ()
+      (for ([suffix '("" "-shm" "-wal")])
+        (define p
+          (string->path (string-append (path->string file) suffix)))
+        (when (file-exists? p) (delete-file p))))))
+
+(test-case "notify_url refuses unknown orders and bad signed callbacks"
+  (define raw (signed-form notification-fields))
+  (define calls (box 0))
+  (define client
+    (make-alipay-merchant-client
+     private-pem public-pem
+     #:transport
+     (lambda args
+       (set-box! calls (add1 (unbox calls)))
+       (values 200 (signed-trade-response query-fields)))))
+  (define file (make-temporary-file "commerce-alipay-no-binding-~a.sqlite"))
+  (delete-file file)
+  (dynamic-wind
+    void
+    (lambda ()
+      (define storage (open-sqlite-commerce-storage file))
+      (define endpoint
+        (make-alipay-webhook-endpoint client "test-app-01" "test-seller-01"
+                                     storage))
+      (let-values ([(status ack)
+                    (handle-alipay-webhook-post
+                     endpoint raw #:timestamp "2026-10-30 10:10:00"
+                     #:observed-at 1793355000)])
+        (check-equal? status 200)
+        (check-equal? ack #"fail"))
+      (check-equal? (unbox calls) 0)
+      (storage-create-checkout-binding!
+       storage
+       (checkout-binding "order_001" "alipay" "taskly"
+                         "taskly-pro-lifetime" "subject-test-001"
+                         "CNY" 1990 2)
+       #:created-at 1793355000)
+      (let-values ([(status ack)
+                    (handle-alipay-webhook-post
+                     endpoint (bytes-append raw #"&extra=data")
+                     #:timestamp "2026-10-30 10:10:00"
+                     #:observed-at 1793355000)])
+        (check-equal? status 200)
+        (check-equal? ack #"fail"))
+      (check-equal? (unbox calls) 0)
+      (storage-close storage))
+    (lambda ()
+      (for ([suffix '("" "-shm" "-wal")])
+        (define p
+          (string->path (string-append (path->string file) suffix)))
+        (when (file-exists? p) (delete-file p))))))
