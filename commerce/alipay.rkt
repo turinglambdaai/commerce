@@ -76,12 +76,12 @@
           [(= b 37)
            (unless (< (+ i 2) (bytes-length part))
              (fail 'alipay-form-invalid "truncated form escape"))
-           (define hi (hex-digit (bytes-ref part (add1 i))))
-           (define lo (hex-digit (bytes-ref part (+ i 2))))
-           (unless (and hi lo)
-             (fail 'alipay-form-invalid "malformed form escape"))
-           (write-byte (+ (* hi 16) lo) output)
-           (loop (+ i 3))]
+           (let ([hi (hex-digit (bytes-ref part (add1 i)))]
+                 [lo (hex-digit (bytes-ref part (+ i 2)))])
+             (unless (and hi lo)
+               (fail 'alipay-form-invalid "malformed form escape"))
+             (write-byte (+ (* hi 16) lo) output)
+             (loop (+ i 3)))]
           [else
            (write-byte (if (= b 43) 32 b) output)
            (loop (add1 i))])))
