@@ -10,7 +10,12 @@
  alipay-cny->fen
  (struct-out alipay-binding)
  (struct-out alipay-confirmed-order)
- (struct-out alipay-notification)
+ alipay-notification?
+ alipay-notification-fields
+ alipay-notification-order-id
+ alipay-notification-trade-id
+ alipay-notification-status
+ alipay-notification-amount
  verify-alipay-notification
  confirm-alipay-onetime-payment)
 
@@ -136,8 +141,7 @@
 ;; active alipay.trade.query result. It must not be built from browser data.
 (struct alipay-confirmed-order (app-id seller-id order-id trade-id status amount)
   #:transparent)
-(struct alipay-notification (fields order-id trade-id status amount)
-  #:transparent)
+(struct alipay-notification (fields order-id trade-id status amount))
 
 (define (read-public pem)
   (with-handlers ([exn:fail?
