@@ -1,6 +1,10 @@
 #lang racket/base
 
-(require commerce
+(require base64
+         commerce
+         crypto
+         crypto/libcrypto
+         json
          commerce/alipay
          rackunit
          racket/string)
@@ -135,3 +139,33 @@ PEM
                (parse-alipay-form
                 (string->bytes/utf-8
                  (string-join (make-list 129 "a=1") "&"))))))
+
+(test-case "server-priced gateway page-pay parameters have a valid RSA2 signature"
+  (define private-key
+    (parameterize ([crypto-factories (list libcrypto-factory)])
+      (generate-private-key (get-pk 'rsa) '((nbits 2048)))))
+  (define params
+    (make-alipay-page-pay-parameters
+     binding private-key
+     #:title "Taskly Pro lifetime"
+     #:notify-url "https://example.test/payments/alipay/notify"
+     #:return-url "https://example.test/orders/return"
+     #:timestamp "2026-10-30 12:30:00"))
+  (check-equal? (cdr (assoc "method" params)) "alipay.trade.page.pay")
+  (define biz (string->jsexpr (cdr (assoc "biz_content" params))))
+  (check-equal? (hash-ref biz 'total_amount) "12.34")
+  (check-equal? (hash-ref biz 'out_trade_no) "order_test_001")
+  (check-true
+   (digest/verify
+    (pk-key->public-only-key private-key) 'sha256
+    (string->bytes/utf-8 (alipay-signing-content params))
+    (base64-decode
+     (string->bytes/utf-8 (cdr (assoc "sign" params))))
+    #:pad 'pkcs1-v1.5))
+  (check-exn (code? 'alipay-checkout-invalid)
+             (lambda ()
+               (make-alipay-page-pay-parameters
+                binding private-key #:title "test"
+                #:notify-url "http://insecure.test"
+                #:return-url "https://example.test/ok"
+                #:timestamp "2026-10-30 12:30:00"))))
