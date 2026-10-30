@@ -2,11 +2,16 @@
 
 (require base64
          commerce
+         commerce/alipay/server
+         commerce/journal
+         commerce/storage
+         commerce/storage/sqlite
          crypto
          crypto/libcrypto
          json
          commerce/alipay
          rackunit
+         racket/file
          racket/string)
 
 ;; Generate fixture key material during the test, never commit a private key
@@ -264,3 +269,80 @@
                 #:notify-url "http://insecure.test"
                 #:return-url "https://example.test/ok"
                 #:timestamp "2026-10-30 12:30:00"))))
+
+(test-case "HTTP Alipay callback journals exactly once and a retry is idempotent"
+  (define temp-dir (make-temporary-file "commerce-alipay-~a" 'directory))
+  (dynamic-wind
+   void
+   (lambda ()
+     (define storage
+       (open-sqlite-commerce-storage (build-path temp-dir "commerce.sqlite")))
+     (dynamic-wind
+      void
+      (lambda ()
+        (storage-create-checkout-binding!
+         storage
+         (checkout-binding "order_test_001" "alipay"
+                           "taskly" "taskly-pro-lifetime" "subject-1"
+                           "CNY" 1234 2)
+         #:created-at 1)
+        (define query-count 0)
+        (define endpoint
+          (make-alipay-webhook-endpoint
+           #:app-id "2026000000000000"
+           #:seller-id "2088000000000000"
+           #:alipay-public-key public-key
+           #:query-order
+           (lambda (order-id)
+             (check-equal? order-id "order_test_001")
+             (set! query-count (add1 query-count))
+             (signed-query-response))
+           #:storage storage))
+        ;; The original notification contains base64 + / = and a payment
+        ;; timestamp with spaces; a real HTTP form must preserve all of it.
+        (define (escape-value v)
+          (string-replace
+           (string-replace
+            (string-replace
+             (string-replace v "%" "%25") "+" "%2B")
+            "/" "%2F")
+           "=" "%3D"))
+        (define payload
+          (string->bytes/utf-8
+           (string-join
+            (for/list ([pair (in-list signed-fields)])
+              (string-append
+               (car pair) "="
+               (escape-value (string-replace (cdr pair) " " "+"))))
+            "&")))
+        (define-values (first-status first-body)
+          (handle-alipay-webhook-post endpoint payload))
+        (check-equal? first-status 200)
+        (check-equal? first-body #"success")
+        (define-values (retry-status retry-body)
+          (handle-alipay-webhook-post endpoint payload))
+        (check-equal? retry-status 200)
+        (check-equal? retry-body #"success")
+        (check-equal? query-count 2)
+        (check-true (journal-record?
+                     (journal-ref storage "alipay" "notify_test_001")))
+        (define-values (tampered-status tampered-body)
+          (handle-alipay-webhook-post
+           endpoint
+           (bytes-append payload #"&app_id=forged")))
+        (check-equal? tampered-status 401)
+        (check-equal? tampered-body #"failure")
+        (define offline
+          (make-alipay-webhook-endpoint
+           #:app-id "2026000000000000"
+           #:seller-id "2088000000000000"
+           #:alipay-public-key public-key
+           #:query-order
+           (lambda (_) (error 'query "network connection lost"))
+           #:storage storage))
+        (define-values (unavailable-status unavailable-body)
+          (handle-alipay-webhook-post offline payload))
+        (check-equal? unavailable-status 503)
+        (check-equal? unavailable-body #"failure"))
+      (lambda () (storage-close storage))))
+   (lambda () (delete-directory/files temp-dir))))
