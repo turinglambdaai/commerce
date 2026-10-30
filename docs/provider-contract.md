@@ -90,10 +90,20 @@ scope, capability matrix, verified contract paths, separately staged
 costs, and typed refusal behavior (ADR-0019). Offers outside the
 admitted matrix are rejected before a checkout is presented: a checkout
 a buyer cannot pay must never be offered, and nothing is repriced,
-converted, or split to fit. Current status: Pancake and ZPAY are not
+converted, or split to fit. Current status: Pancake, ZPAY and Alipay Vibe Pay basic collection are not
 admitted; no approved merchant account exists.
 
 ## Provider-specific notes
+
+Alipay Vibe Pay **basic collection** is under incremental development as an
+optional, one-time CNY web/desktop-browser path. `commerce/alipay` constructs
+RSA2 page-pay requests, validates signed callbacks and signed trade-query
+responses; `commerce/alipay/client` provides a bounded HTTPS query with
+transactional journal acceptance. A callback or browser redirect alone must
+never issue rights. This path is **not merchant-admitted**, and refund,
+provider HTTP ingress, settlement and live canary evidence remain incomplete.
+See [Alipay integration handoff](alipay-vibe-pay.md) and ADR-0019.
+
 
 Pancake is the first production adapter because it supports individual
 developers, hosted checkout, one-time products, subscriptions, refunds, and a
