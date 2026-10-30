@@ -70,25 +70,51 @@ hosted payment service. An HTTP return URL or signed callback alone
 does not prove a completed transaction. The current verifier supports
 ordinary RSA2 public-key mode, not provider certificate-mode credentials.
 
+## HTTP notify_url: implemented as a separate Commerce listener
+
+`commerce/alipay/server` provides `make-alipay-webhook-endpoint`,
+`handle-alipay-webhook-post` and `serve-alipay-webhook-endpoint`.
+The handler accepts **raw POST bytes**, resolves a previously committed
+`storage-checkout-binding-ref` by the untrusted merchant order number,
+requires the stored provider/CNY/exponent/Offer/subject identity, then
+verifies the RSA2 notice using the configured merchant client's Alipay
+public key. It performs an active signed `alipay.trade.query` via the
+merchant-only HTTPS client, commits the exact query-response bytes and
+verified canonical payment event to Commerce's journal, and replies with
+**only** `success` for `accepted`/`replayed`. All unknown/malformed/
+unverifiable paths reply `fail`. No Permit issuer runs synchronously.
+
+This is a **separate** Racket web-server listener on `/webhooks/alipay`,
+rather than a silent change to the existing Pancake listener. Operators
+must route HTTPS through a vetted reverse proxy, configure the correct
+host timezone for the Alipay query timestamp, persist a trusted checkout
+binding before presenting payment, and keep the issuer/outbox workers
+separate. Do not expose a development listener on the public network.
+The RSA2 public-key mode alone is supported: Alipay certificate-mode or
+delegated applications require another reviewed implementation.
+
 ## Remaining implementation and release gates
 
-1. Wire the existing Commerce HTTP server to the provider's
-   `notify_url` POST, fetch the persisted checkout binding from trusted
-   storage, authenticate its exact form bytes, perform the active query
-   and return **exact `success` only after durable journal acceptance**,
-   or `fail` for provider retries. Rehearse lost-notification reconciliation
-   and crash recovery, with Permit signing solely in the outbox worker.
-2. Add `alipay.trade.refund` and refund-query with stable refund request
-   ids, correct partial/full refund accounting, conservation and recovery
-   tests. A paid `TRADE_SUCCESS` status does not prove no partial refund.
-3. Review merchant/account and software-product admission, SDK/certificate
-   mode selection, pricing/fees and settlement, platform policies,
-   HTTPS deployment, approved sandbox credentials, and an explicitly
-   authorized low-value live transaction and refund/Permit claim canary.
+1. Rehearse a complete **approved sandbox** instance end-to-end:
+   saved binding, hosted pay redirect, signed notify, active query,
+   durable acknowledgement, projection/outbox, offline Permit claim,
+   lost-notify reconciliation and backup/restore. Add real service
+   configuration, key rotation, concurrency and HTTP integration tests.
+   A green fake-transport suite is not sandbox evidence.
+2. Design and implement refund and refund-query flows with stable
+   refund request identities, correct partial/full-refund accounting,
+   conservation and recovery. Current code **refuses** refund-bearing
+   notifications and queries rather than misclassifying them as purchases.
+   Commerce's current core models refunded orders as a boolean; partial
+   refunds require a reviewed durable model extension before production.
+3. Complete merchant/account/software-category admission, live fees and
+   settlement, app/certificate mode, sandbox/live key scoping, HTTPS
+   deployment and an explicitly authorized first real low-value payment
+   and refund/claim canary. See
    [ADR-0019](decisions/0019-provider-admission.md),
    [issue #5](https://github.com/turlamai/commerce/issues/5),
    [issue #10](https://github.com/turlamai/commerce/issues/10), and
-   [issue #4](https://github.com/turlamai/commerce/issues/4) remain gates.
+   [issue #4](https://github.com/turlamai/commerce/issues/4).
 
 ## Example: constructing signed page-pay fields
 
