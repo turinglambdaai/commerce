@@ -116,7 +116,7 @@
        (checkout-binding-subject-id stored)
        (money "CNY" (checkout-binding-amount-minor-units stored))))
     (define query-raw
-      ((alipay-webhook-endpoint-query-order endpoint) order-id))
+      ((alipay-webhook-endpoint-query-order endpoint) binding))
     (define confirmed
       (verify-alipay-trade-query-response
        query-raw
