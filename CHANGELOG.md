@@ -35,9 +35,11 @@ All notable changes to Commerce are documented here.
   A signed callback remains an opaque notice, not verified payment evidence.
   Add merchant-signed `alipay.trade.query`, exact raw-JSON response RSA2
   verification, bound CNY/order/trade status proof, timeout-bounded no-retry
-  HTTPS query, and durable journal acceptance with replay tests. The HTTP
-  notification edge, full/partial refunds, merchant admission and real
-  payment-to-Permit claim remain distinct unfinished release gates.
+  HTTPS query, durable journal acceptance and a standalone `/webhooks/alipay`
+  HTTP notify handler that resolves server-stored checkout bindings, verifies
+  and queries the trade, and sends plain `success` only after commit. Refund
+  and partial-refund semantics, merchant admission, integrated sandbox
+  operation and a real payment-to-Permit claim remain release blockers.
 
 
 - Add role-separated Commerce service startup: the HTTP edge no longer needs
