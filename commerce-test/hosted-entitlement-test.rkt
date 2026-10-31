@@ -1,13 +1,8 @@
 #lang racket/base
 (require rackunit
-         commerce
-         commerce/provider
-         commerce/journal
          commerce/storage
          commerce/storage/sqlite
          commerce/hosted-entitlement
-         crypto
-         crypto/libcrypto
          racket/file)
 
 (define (with-storage proc)
@@ -19,11 +14,6 @@
      (dynamic-wind void (lambda () (proc store))
                    (lambda () (storage-close store))))
    (lambda () (delete-directory/files dir))))
-
-(define (digest raw)
-  (bytes->hex-string
-   (parameterize ([crypto-factories (list libcrypto-factory)])
-     (digest 'sha256 raw))))
 
 (test-case "scoped reads default to no access, no existence leak"
   (with-storage
