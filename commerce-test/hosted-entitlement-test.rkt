@@ -31,3 +31,27 @@
                                 (equal? subject "customer-a")
                                 (equal? offer "taskly-pro-lifetime"))))
                    (hasheq 'status "absent")))))
+
+
+(test-case "authorization sees all four scope fields and denies cross-account reads"
+  (with-storage
+   (lambda (storage)
+     (define seen #f)
+     (define (authorize issuer subject-type subject-id offer-id)
+       (set! seen (list issuer subject-type subject-id offer-id))
+       (and (equal? issuer "commerce.example")
+            (equal? subject-type "account")
+            (equal? subject-id "customer-a")
+            (equal? offer-id "taskly-pro-lifetime")))
+     (define (lookup subject-id offer-id)
+       (current-entitlement-snapshot
+        storage #:issuer "commerce.example" #:subject-type "account"
+        #:subject-id subject-id #:offer-id offer-id
+        #:authorize authorize))
+     (check-exn exn:fail? (lambda () (lookup "customer-b" "taskly-pro-lifetime")))
+     (check-equal? seen
+                   (list "commerce.example" "account" "customer-b"
+                         "taskly-pro-lifetime"))
+     (check-exn exn:fail? (lambda () (lookup "customer-a" "other-offer")))
+     (check-equal? (lookup "customer-a" "taskly-pro-lifetime")
+                   (hasheq 'status "absent")))))
